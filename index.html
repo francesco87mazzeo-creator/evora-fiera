@@ -26,44 +26,88 @@
       {id:"p5",name:"Sconto 10%",   emoji:"🎁",color:"#B22222",desc:"Codice sconto 10% su evora.it",     qty:999,assigned:0,order:5,value:0},
     ];
 
-    async function initPrizes(){for(const p of DEFAULT_PRIZES){const r=doc(db,"prizes",p.id);if(!(await getDoc(r)).exists())await setDoc(r,p);}}
+    async function initPrizes(){
+      for(const p of DEFAULT_PRIZES){
+        const r=doc(db,"prizes",p.id);
+        if(!(await getDoc(r)).exists()) await setDoc(r,p);
+      }
+    }
 
     async function assignPrize(token,name,email){
       const ex=await getDoc(doc(db,"assignments",token));
-      if(ex.exists())return ex.data();
+      if(ex.exists()) return ex.data();
       const snap=await getDocs(query(collection(db,"prizes"),orderBy("order")));
       const avail=snap.docs.map(d=>({id:d.id,...d.data()})).find(p=>p.assigned<p.qty);
-      if(!avail)return null;
+      if(!avail) return null;
       const code=`EVR-${avail.id.toUpperCase()}-${Math.random().toString(36).substring(2,6).toUpperCase()}`;
       const asgn={id:token,userToken:token,userName:name,userEmail:email,prizeId:avail.id,prizeName:avail.name,prizeEmoji:avail.emoji,prizeDesc:avail.desc,prizeColor:avail.color,code,status:"assigned",assignedAt:new Date().toISOString(),deliveredAt:null};
-      await runTransaction(db,async tx=>{const pr=doc(db,"prizes",avail.id);const f=await tx.get(pr);if(f.data().assigned>=f.data().qty)throw new Error("exhausted");tx.update(pr,{assigned:f.data().assigned+1});tx.set(doc(db,"assignments",token),asgn);});
+      await runTransaction(db,async tx=>{
+        const pr=doc(db,"prizes",avail.id);
+        const f=await tx.get(pr);
+        if(f.data().assigned>=f.data().qty) throw new Error("exhausted");
+        tx.update(pr,{assigned:f.data().assigned+1});
+        tx.set(doc(db,"assignments",token),asgn);
+      });
       return asgn;
     }
 
-    async function markDelivered(token){const ref=doc(db,"assignments",token);const s=await getDoc(ref);if(!s.exists()||s.data().status==="delivered")return false;await updateDoc(ref,{status:"delivered",deliveredAt:new Date().toISOString()});return true;}
-    async function getAllAssignments(){const s=await getDocs(query(collection(db,"assignments"),orderBy("assignedAt","desc")));return s.docs.map(d=>d.data());}
-    async function findByCode(code){const s=await getDocs(query(collection(db,"assignments"),where("code","==",code)));return s.empty?null:s.docs[0].data();}
-    async function getPrizes(){const s=await getDocs(query(collection(db,"prizes"),orderBy("order")));return s.docs.map(d=>d.data());}
-    async function savePrizes(list){const old=await getDocs(collection(db,"prizes"));for(const d of old.docs)await updateDoc(doc(db,"prizes",d.id),{qty:0,assigned:0});for(const p of list)await setDoc(doc(db,"prizes",p.id),p);}
-    function listenAssignment(token,cb){return onSnapshot(doc(db,"assignments",token),s=>{if(s.exists())cb(s.data());});}
-    async function getConfig(key){const s=await getDoc(doc(db,"config",key));return s.exists()?s.data().value:null;}
-    async function saveConfig(key,val){await setDoc(doc(db,"config",key),{value:val});}
+    async function markDelivered(token){
+      const ref=doc(db,"assignments",token);
+      const s=await getDoc(ref);
+      if(!s.exists()||s.data().status==="delivered") return false;
+      await updateDoc(ref,{status:"delivered",deliveredAt:new Date().toISOString()});
+      return true;
+    }
 
+    async function getAllAssignments(){
+      const s=await getDocs(query(collection(db,"assignments"),orderBy("assignedAt","desc")));
+      return s.docs.map(d=>d.data());
+    }
+
+    async function findByCode(code){
+      const s=await getDocs(query(collection(db,"assignments"),where("code","==",code)));
+      return s.empty?null:s.docs[0].data();
+    }
+
+    async function getPrizes(){
+      const s=await getDocs(query(collection(db,"prizes"),orderBy("order")));
+      return s.docs.map(d=>d.data());
+    }
+
+    async function savePrizes(list){
+      const old=await getDocs(collection(db,"prizes"));
+      for(const d of old.docs) await updateDoc(doc(db,"prizes",d.id),{qty:0,assigned:0});
+      for(const p of list) await setDoc(doc(db,"prizes",p.id),p);
+    }
+
+    function listenAssignment(token,cb){
+      return onSnapshot(doc(db,"assignments",token),s=>{if(s.exists())cb(s.data());});
+    }
+
+    async function getConfig(key){
+      const s=await getDoc(doc(db,"config",key));
+      return s.exists()?s.data().value:null;
+    }
+
+    async function saveConfig(key,val){
+      await setDoc(doc(db,"config",key),{value:val});
+    }
+
+    // ── RESET: delete all assignments + reset prize counters ──────────────
     async function resetAll(){
-      const asnSnap = await getDocs(collection(db,"assignments"));
-      for (const d of asnSnap.docs) {
-        await deleteDoc(d.ref);
-      }
-      const prSnap = await getDocs(collection(db,"prizes"));
-      for (const d of prSnap.docs) {
-        await updateDoc(d.ref,{assigned:0});
-      }
+      const asnSnap=await getDocs(collection(db,"assignments"));
+      const delPromises=asnSnap.docs.map(d=>deleteDoc(doc(db,"assignments",d.id)));
+      await Promise.all(delPromises);
+      const prSnap=await getDocs(collection(db,"prizes"));
+      const updPromises=prSnap.docs.map(d=>updateDoc(doc(db,"prizes",d.id),{assigned:0}));
+      await Promise.all(updPromises);
     }
 
     window.DB={initPrizes,assignPrize,markDelivered,getAllAssignments,findByCode,getPrizes,savePrizes,listenAssignment,getConfig,saveConfig,resetAll};
     await initPrizes();
     window.dispatchEvent(new Event("db-ready"));
   </script>
+
   <style>
     :root{--bg:#080808;--s:#111;--s2:#1a1a1a;--b:#2a2a2a;--red:#B22222;--rl:#cc3333;--rg:rgba(178,34,34,.35);--w:#f5f5f5;--g:#888;--fd:'Barlow Condensed',sans-serif;--fs:'Cormorant Garamond',serif;--fb:'Barlow',sans-serif;}
     *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
@@ -77,6 +121,8 @@
     .page{width:100%;max-width:420px;display:flex;flex-direction:column;align-items:center;animation:fu .5s cubic-bezier(.16,1,.3,1) both}
     @keyframes fu{from{opacity:0;transform:translateY(24px)}to{opacity:1;transform:none}}
     .hidden{display:none!important}
+
+    /* WELCOME */
     .wl{font-family:var(--fd);font-size:13px;letter-spacing:6px;color:var(--g);text-transform:uppercase;margin-bottom:48px}.wl span{color:var(--red)}
     .wt{font-family:var(--fd);font-size:64px;font-weight:800;letter-spacing:2px;line-height:.95;text-align:center;text-transform:uppercase;margin-bottom:8px}.wt em{color:var(--red);font-style:normal}
     .wn{font-family:var(--fs);font-size:28px;color:var(--g);text-align:center;margin-bottom:40px}.wn strong{color:var(--w)}
@@ -87,6 +133,10 @@
     .cta:hover{background:var(--rl);transform:translateY(-1px);box-shadow:0 8px 32px var(--rg)}
     .bg{background:transparent;border:1px solid var(--b);color:var(--g);padding:10px 20px;font-family:var(--fb);font-size:13px;cursor:pointer;transition:all .15s;margin-top:10px}.bg:hover{border-color:var(--g);color:var(--w)}
     .bb{display:inline-flex;align-items:center;gap:8px;padding:10px 16px;background:transparent;border:1px solid var(--b);color:var(--g);font-family:var(--fb);font-size:13px;cursor:pointer;transition:all .15s;margin-bottom:20px}.bb:hover{border-color:var(--w);color:var(--w)}
+    .accept-line{margin-top:12px;text-align:center;font-size:12px;color:#555}
+    .accept-line a{color:#666;text-decoration:underline;text-underline-offset:3px;cursor:pointer;transition:color .15s}.accept-line a:hover{color:var(--g)}
+
+    /* TICKET */
     .gh{width:100%;display:flex;align-items:center;justify-content:space-between;margin-bottom:28px}
     .gl{font-family:var(--fd);font-size:22px;font-weight:800;letter-spacing:4px}.gl span{color:var(--red)}
     .gs{font-family:var(--fd);font-size:11px;letter-spacing:3px;color:var(--g)}
@@ -106,6 +156,8 @@
     .tser{font-family:var(--fd);font-size:9px;letter-spacing:2px;color:#444}
     .tdots{display:flex;gap:4px}.tdot{width:6px;height:6px;border-radius:50%;background:#2a2a2a}.tdot.r{background:var(--red)}
     .sh{margin-top:20px;text-align:center}.sht{font-family:var(--fd);font-size:12px;letter-spacing:3px;color:var(--g);text-transform:uppercase}
+
+    /* RESULT */
     .rh{text-align:center;padding:32px 0 24px}
     .re{font-family:var(--fd);font-size:12px;letter-spacing:5px;color:var(--red);text-transform:uppercase;margin-bottom:10px}
     .rh1{font-family:var(--fd);font-size:72px;font-weight:800;letter-spacing:2px;line-height:.9;text-transform:uppercase}.rh1 span{display:block;color:var(--red)}
@@ -122,6 +174,8 @@
     .ri{margin-top:16px;padding:18px;background:rgba(178,34,34,.05);border:1px solid rgba(178,34,34,.2)}
     .rit{font-family:var(--fd);font-size:11px;letter-spacing:3px;color:var(--red);text-transform:uppercase;margin-bottom:10px}
     .ril{list-style:none}.ril li{font-size:13px;color:var(--g);padding:4px 0;display:flex;gap:10px}.ril li::before{content:'—';color:var(--red);flex-shrink:0}
+
+    /* THANK YOU */
     .ty{text-align:center;padding:40px 20px}
     .tye{font-size:80px;margin-bottom:24px;animation:bnc .6s ease infinite alternate}
     @keyframes bnc{from{transform:scale(1)}to{transform:scale(1.08)}}
@@ -130,6 +184,8 @@
     .tyc{background:var(--s);border:1px solid var(--b);padding:24px;position:relative;margin-bottom:24px;width:100%}.tyc::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:var(--red)}
     .tyct{font-size:15px;line-height:1.8;color:#aaa}.tyct strong{color:var(--w)}
     .tyf{font-family:var(--fd);font-size:11px;letter-spacing:3px;color:#444;text-transform:uppercase}
+
+    /* LOGIN */
     .lw{width:100%;max-width:360px;display:flex;flex-direction:column;align-items:center;animation:fu .4s ease both}
     .llo{font-family:var(--fd);font-size:36px;font-weight:800;letter-spacing:6px;margin-bottom:8px}.llo span{color:var(--red)}
     .lro{font-family:var(--fd);font-size:12px;letter-spacing:4px;color:var(--g);text-transform:uppercase;margin-bottom:40px}
@@ -138,7 +194,9 @@
     .li{width:100%;padding:14px 16px;background:#0a0a0a;border:1px solid var(--b);color:var(--w);font-family:var(--fd);font-size:20px;letter-spacing:4px;margin-bottom:16px}.li:focus{outline:none;border-color:var(--red)}
     .le{color:#ff6b6b;font-size:13px;margin-bottom:12px;min-height:20px;text-align:center;font-family:var(--fb)}
     .lbk{background:none;border:none;color:#444;font-family:var(--fd);font-size:11px;letter-spacing:3px;text-transform:uppercase;cursor:pointer;margin-top:16px;padding:8px}.lbk:hover{color:var(--g)}
-    #staff-page{width:100%;max-width:600px;padding:0 4px 60px;animation:fu .4s ease both}
+
+    /* STAFF */
+    #pg-staff{width:100%;max-width:600px;padding:0 4px 60px;animation:fu .4s ease both}
     .dn{display:flex;align-items:center;gap:10px;margin-bottom:24px}
     .dt{font-family:var(--fd);font-size:30px;font-weight:800;letter-spacing:3px;flex:1}
     .dsb{padding:10px 16px;background:var(--red);color:white;border:none;font-family:var(--fd);font-size:13px;letter-spacing:2px;cursor:pointer}
@@ -160,6 +218,8 @@
     .abt:disabled{background:#222;color:#555;cursor:not-allowed}
     .demp{text-align:center;padding:48px;color:var(--g);font-family:var(--fd);font-size:18px;letter-spacing:2px}
     .dld{text-align:center;padding:32px;color:var(--g);font-size:14px}
+
+    /* SCANNER */
     .scw{width:100%;max-width:420px;padding:0 4px;animation:fu .4s ease both}
     .scn{display:flex;align-items:center;gap:12px;margin-bottom:20px}
     .sct{font-family:var(--fd);font-size:28px;font-weight:800;letter-spacing:3px;flex:1}
@@ -183,7 +243,9 @@
     .sdl{width:100%;padding:14px;background:var(--red);color:white;border:none;font-family:var(--fd);font-size:16px;letter-spacing:3px;font-weight:700;cursor:pointer}
     .sdl:disabled{background:#2a2a2a;color:#555;cursor:not-allowed}
     .sag{width:100%;padding:11px;background:transparent;border:1px solid var(--b);color:var(--g);cursor:pointer;font-family:var(--fb);margin-top:10px;font-size:13px}
-    #admin-page{width:100%;max-width:600px;padding:0 4px 60px;animation:fu .4s ease both}
+
+    /* ADMIN */
+    #pg-admin{width:100%;max-width:600px;padding:0 4px 60px;animation:fu .4s ease both}
     .adn{display:flex;align-items:center;gap:10px;margin-bottom:24px}
     .adt{font-family:var(--fd);font-size:28px;font-weight:800;letter-spacing:3px;flex:1}
     .ads{background:var(--s);border:1px solid var(--b);padding:24px;margin-bottom:16px;position:relative}.ads::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:var(--red)}
@@ -202,6 +264,8 @@
     .adbb{padding:13px 24px;background:var(--red);color:white;border:none;font-family:var(--fd);font-size:15px;letter-spacing:2px;font-weight:700;cursor:pointer;transition:all .2s}.adbb:hover{background:var(--rl);transform:translateY(-1px)}
     .adbb.o{background:transparent;border:1px solid var(--b);color:var(--g)}.adbb.o:hover{border-color:var(--w);color:var(--w);transform:none}
     .adsv{color:#4ecdc4;font-size:13px;margin-top:10px;font-family:var(--fd);letter-spacing:2px;min-height:20px}
+
+    /* MODAL confirm */
     .mb{position:fixed;inset:0;background:rgba(0,0,0,.92);display:flex;align-items:center;justify-content:center;z-index:100;padding:20px}
     .mbx{background:var(--s);border:1px solid var(--b);padding:28px;max-width:360px;width:100%;border-top:3px solid var(--red)}
     .mbt{font-family:var(--fd);font-size:26px;font-weight:800;letter-spacing:2px;margin-bottom:8px}
@@ -209,45 +273,62 @@
     .mba{display:flex;gap:10px}
     .mbc{flex:1;padding:12px;background:transparent;border:1px solid var(--b);color:var(--g);cursor:pointer;font-family:var(--fb)}
     .mbcf{flex:1;padding:12px;background:var(--red);color:white;border:none;cursor:pointer;font-family:var(--fd);font-size:15px;letter-spacing:2px;font-weight:700}
+
+    /* EFFECTS */
     #glow{position:fixed;inset:0;pointer-events:none;z-index:40}
     #glow.active{animation:gp .8s ease-out}
     @keyframes gp{0%{box-shadow:inset 0 0 0 0 rgba(178,34,34,0)}30%{box-shadow:inset 0 0 80px 40px rgba(178,34,34,.25)}100%{box-shadow:inset 0 0 0 0 rgba(178,34,34,0)}}
     #pcv{position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:50;display:none}
     @media(max-width:380px){.wt{font-size:52px}.rh1{font-size:56px}}
+
+    /* FOOTER */
     #footer{position:fixed;bottom:0;left:0;right:0;z-index:30;padding:12px 20px;display:flex;align-items:center;justify-content:center;gap:16px;background:linear-gradient(to top,rgba(8,8,8,.98) 60%,transparent);border-top:1px solid #1a1a1a}
     #footer.hidden{display:none!important}
-    .ft-link{background:none;border:none;color:#555;font-family:var(--fd);font-size:11px;letter-spacing:2px;text-transform:uppercase;cursor:pointer;padding:4px 8px;transition:color .15s}
-    .ft-link:hover{color:var(--g)}
+    .ft-link{background:none;border:none;color:#555;font-family:var(--fd);font-size:11px;letter-spacing:2px;text-transform:uppercase;cursor:pointer;padding:4px 8px;transition:color .15s}.ft-link:hover{color:var(--g)}
     .ft-sep{color:#333;font-size:10px}
-    #reg-modal{position:fixed;inset:0;z-index:200;display:flex;align-items:flex-end;justify-content:center;padding:0;transition:opacity .25s}
+
+    /* REGULATION MODAL */
+    #reg-modal{position:fixed;inset:0;z-index:200;display:flex;align-items:flex-end;justify-content:center}
     #reg-modal.hidden{display:none!important}
-    #reg-modal-backdrop{position:absolute;inset:0;background:rgba(0,0,0,.7);backdrop-filter:blur(4px)}
-    #reg-modal-box{position:relative;background:var(--s);border:1px solid var(--b);border-radius:16px 16px 0 0;border-top:3px solid var(--red);width:100%;max-width:520px;max-height:85vh;display:flex;flex-direction:column;animation:slideUp .3s cubic-bezier(.16,1,.3,1)}
+    #reg-modal-backdrop{position:absolute;inset:0;background:rgba(0,0,0,.75);backdrop-filter:blur(4px)}
+    #reg-modal-box{position:relative;background:var(--s);border:1px solid var(--b);border-radius:16px 16px 0 0;border-top:3px solid var(--red);width:100%;max-width:520px;max-height:88vh;display:flex;flex-direction:column;animation:slideUp .3s cubic-bezier(.16,1,.3,1)}
     @keyframes slideUp{from{transform:translateY(100%);opacity:0}to{transform:none;opacity:1}}
-    #reg-modal-header{display:flex;align-items:center;justify-content:space-between;padding:20px 24px 16px;border-bottom:1px solid var(--b);flex-shrink:0}
-    #reg-modal-title{font-family:var(--fd);font-size:22px;font-weight:800;letter-spacing:2px}
-    #reg-modal-close{width:32px;height:32px;background:var(--s2);border:1px solid var(--b);color:var(--g);border-radius:50%;cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center;transition:all .15s;flex-shrink:0}
+    #reg-modal-header{display:flex;align-items:center;justify-content:space-between;padding:18px 20px 14px;border-bottom:1px solid var(--b);flex-shrink:0}
+    #reg-modal-title{font-family:var(--fd);font-size:20px;font-weight:800;letter-spacing:2px}
+    #reg-modal-close{width:30px;height:30px;background:var(--s2);border:1px solid var(--b);color:var(--g);border-radius:50%;cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center;transition:all .15s;flex-shrink:0}
     #reg-modal-close:hover{background:var(--b);color:var(--w)}
-    #reg-modal-body{overflow-y:auto;padding:20px 24px 32px;flex:1;-webkit-overflow-scrolling:touch}
-    #reg-modal-body h3{font-family:var(--fd);font-size:14px;font-weight:700;letter-spacing:2px;color:var(--red);text-transform:uppercase;margin:18px 0 6px}
+    #reg-modal-body{overflow-y:auto;padding:16px 20px 28px;flex:1;-webkit-overflow-scrolling:touch}
+    #reg-modal-body h3{font-family:var(--fd);font-size:13px;font-weight:700;letter-spacing:2px;color:var(--red);text-transform:uppercase;margin:16px 0 5px}
     #reg-modal-body h3:first-child{margin-top:0}
-    #reg-modal-body p{font-size:13px;color:#aaa;line-height:1.7;margin-bottom:8px}
+    #reg-modal-body p{font-size:13px;color:#aaa;line-height:1.7;margin-bottom:6px}
     #reg-modal-body strong{color:var(--w)}
-    .reg-placeholder{font-size:13px;color:#555;font-style:italic;padding:20px 0;text-align:center}
-    .accept-line{margin-top:12px;text-align:center;font-size:12px;color:#555}
-    .accept-line a{color:#666;text-decoration:underline;text-underline-offset:3px;cursor:pointer;transition:color .15s}
-    .accept-line a:hover{color:var(--g)}
+
+    /* Day tabs in regulation modal */
+    .reg-day-tabs{display:flex;gap:6px;margin:12px 0 8px;flex-wrap:wrap}
+    .reg-day-tab{padding:6px 14px;border:1px solid var(--b);background:transparent;color:var(--g);font-family:var(--fd);font-size:12px;letter-spacing:1px;cursor:pointer;border-radius:4px;transition:all .15s}
+    .reg-day-tab.active{background:var(--red);border-color:var(--red);color:white}
+    .reg-day-seq{display:none}.reg-day-seq.active{display:block}
+    .reg-seq-table{width:100%;border-collapse:collapse;font-size:12px;margin-top:6px}
+    .reg-seq-table tr{border-bottom:1px solid #1a1a1a}
+    .reg-seq-table td{padding:6px 8px;color:#ccc}
+    .reg-seq-table td:first-child{color:#555;font-family:var(--fd);width:32px;font-size:11px}
+    .reg-seq-table td:last-child{color:#555;text-align:right;font-size:11px}
+    .reg-seq-wrap{background:#0a0a0a;border:1px solid #2a2a2a;max-height:220px;overflow-y:auto;border-radius:4px}
   </style>
 </head>
 <body>
 <div id="loader"><div class="ll">EV<span>O</span>RA</div><div class="sp"></div></div>
 <div id="glow"></div>
 <canvas id="pcv"></canvas>
+
+<!-- FOOTER -->
 <div id="footer" class="hidden">
   <button class="ft-link" onclick="openRegModal()">Regolamento</button>
   <span class="ft-sep">|</span>
   <button class="ft-link" onclick="openPrivacyModal()">Privacy</button>
 </div>
+
+<!-- REGULATION MODAL -->
 <div id="reg-modal" class="hidden">
   <div id="reg-modal-backdrop" onclick="closeRegModal()"></div>
   <div id="reg-modal-box">
@@ -256,13 +337,14 @@
       <button id="reg-modal-close" onclick="closeRegModal()">✕</button>
     </div>
     <div id="reg-modal-body">
-      <div class="reg-placeholder" id="reg-modal-content">
-        Il regolamento sarà disponibile dopo la configurazione nell'area Admin.
-      </div>
+      <div id="reg-modal-content"></div>
     </div>
   </div>
 </div>
+
 <div id="app" style="display:none;padding-bottom:52px">
+
+  <!-- WELCOME -->
   <div id="pg-welcome" class="page hidden">
     <div class="wl">EVORA <span>●</span> FIERA 2026</div>
     <div class="wt">IL TUO<br><em>PREMIO</em><br>TI ASPETTA</div>
@@ -273,6 +355,8 @@
     <button class="cta" onclick="doShowGame()">Scopri il tuo premio →</button>
     <div class="accept-line">Giocando accetti il <a onclick="openRegModal()">regolamento</a></div>
   </div>
+
+  <!-- GAME -->
   <div id="pg-game" class="page hidden">
     <div class="gh"><div class="gl">EV<span>O</span>RA</div><div class="gs">BIGLIETTO VINCENTE</div></div>
     <div class="ticket">
@@ -285,6 +369,8 @@
     </div>
     <div class="sh"><div class="sht">Passa il dito per grattare</div></div>
   </div>
+
+  <!-- RESULT -->
   <div id="pg-result" class="page hidden">
     <div class="rh"><div class="re">Congratulazioni</div><div class="rh1">HAI<span>VINTO</span></div><div class="rs">Il tuo premio è stato assegnato</div></div>
     <div class="rc">
@@ -299,6 +385,8 @@
       </div>
     </div>
   </div>
+
+  <!-- THANK YOU -->
   <div id="pg-ty" class="page hidden">
     <div class="ty">
       <div class="tye">🎉</div>
@@ -308,6 +396,8 @@
       <div class="tyf">EVORA · FIERA 2026</div>
     </div>
   </div>
+
+  <!-- LOGIN STAFF -->
   <div id="pg-login-staff" class="hidden" style="display:none;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;width:100%">
     <div class="lw">
       <div class="llo">EV<span>O</span>RA</div><div class="lro">Accesso Staff</div>
@@ -320,6 +410,8 @@
       <button class="lbk" onclick="goHome()">← Torna all'app</button>
     </div>
   </div>
+
+  <!-- LOGIN ADMIN -->
   <div id="pg-login-admin" class="hidden" style="display:none;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;width:100%">
     <div class="lw">
       <div class="llo">EV<span>O</span>RA</div><div class="lro">Accesso Admin</div>
@@ -332,6 +424,8 @@
       <button class="lbk" onclick="goHome()">← Torna all'app</button>
     </div>
   </div>
+
+  <!-- STAFF -->
   <div id="pg-staff" class="hidden" style="width:100%;max-width:600px;padding:0 4px 60px">
     <div id="sv-list">
       <div class="dn">
@@ -367,11 +461,14 @@
       <div id="scres"></div>
     </div>
   </div>
+
+  <!-- ADMIN -->
   <div id="pg-admin" class="hidden" style="width:100%;max-width:600px;padding:0 4px 60px;animation:fu .4s ease both">
     <div class="adn">
       <button class="dbb" onclick="logoutAdmin()">← Esci</button>
       <div class="adt">ADMIN</div>
     </div>
+
     <div class="ads">
       <div class="adst">PREMI</div>
       <div class="adss">Configura i premi con quantità totale e valore. La distribuzione nei 4 giorni si imposta nella sezione Regolamento.</div>
@@ -384,62 +481,66 @@
       </div>
       <div class="adsv" id="psv"></div>
     </div>
+
     <div class="ads">
       <div class="adst">PASSWORD</div>
-      <div class="adss">Cambia le password di accesso. Le modifiche sono immediate.</div>
+      <div class="adss">Cambia le password di accesso.</div>
       <div class="adf"><div class="adl">Nuova password Staff</div><input class="adi" type="text" id="nsp" placeholder="Lascia vuoto per non cambiare"/></div>
       <div class="adf"><div class="adl">Nuova password Admin</div><input class="adi" type="text" id="nap" placeholder="Lascia vuoto per non cambiare"/></div>
       <div class="abr"><button class="adbb" onclick="savePwds()">💾 Salva Password</button></div>
       <div class="adsv" id="pwsv"></div>
     </div>
+
     <div class="ads">
       <div class="adst">STATISTICHE</div>
       <div class="adss">Riepilogo evento in tempo reale.</div>
       <div id="adstats"><div class="dld">Caricamento…</div></div>
       <div class="abr"><button class="adbb o" onclick="loadStats()">↺ Aggiorna</button></div>
     </div>
+
+    <!-- RESET -->
     <div class="ads" style="border-color:#3a1a1a">
       <div class="adst" style="color:#ff6b6b">⚠ RESET COMPLETO</div>
       <div class="adss">Cancella tutte le partite, i codici assegnati e azzera i contatori. I premi configurati restano. Usa solo prima di una nuova sessione di test o a inizio fiera.</div>
       <div style="padding:14px;background:rgba(255,107,107,.06);border:1px solid rgba(255,107,107,.2);font-size:13px;color:#aaa;margin-bottom:16px;line-height:1.7">
-        ❌ Questa operazione è <strong style="color:var(--w)">irreversibile</strong>. Tutti i giocatori, premi assegnati e codici verranno eliminati dal database.
+        ❌ Questa operazione è <strong style="color:var(--w)">irreversibile</strong>. Tutti i giocatori, premi assegnati e codici verranno eliminati.
       </div>
-      <button class="adbb" style="background:#8b1a1a;width:100%" onclick="confirmReset()">🗑 RESET COMPLETO DATI</button>
+      <button id="reset-btn" class="adbb" style="background:#8b1a1a;width:100%" onclick="confirmReset()">🗑 RESET COMPLETO DATI</button>
       <div class="adsv" id="reset-msg"></div>
     </div>
+
+    <!-- REGULATION -->
     <div class="ads">
       <div class="adst">REGOLAMENTO</div>
-      <div class="adss">Inserisci i dati azienda e configura i 4 giorni di fiera. Genera la sequenza predeterminata e scarica il regolamento legale completo con allegati.</div>
+      <div class="adss">Inserisci i dati azienda, configura i 4 giorni e genera le sequenze. I dati vengono salvati automaticamente su Firebase.</div>
       <div style="margin-bottom:20px">
         <div style="font-family:var(--fd);font-size:12px;letter-spacing:3px;color:var(--red);text-transform:uppercase;margin-bottom:12px">DATI AZIENDA</div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-          <div class="adf"><div class="adl">Ragione Sociale *</div><input class="adi" id="rg-name" placeholder="Evora S.r.l."/></div>
-          <div class="adf"><div class="adl">Partita IVA *</div><input class="adi" id="rg-vat" placeholder="IT12345678901"/></div>
-          <div class="adf" style="grid-column:1/-1"><div class="adl">Sede Legale</div><input class="adi" id="rg-addr" placeholder="Via Roma 1, 20100 Milano (MI)"/></div>
-          <div class="adf"><div class="adl">Città (Foro Competente) *</div><input class="adi" id="rg-city" placeholder="Milano"/></div>
-          <div class="adf"><div class="adl">Email Privacy</div><input class="adi" id="rg-email" placeholder="privacy@evora.it"/></div>
-          <div class="adf" style="grid-column:1/-1"><div class="adl">Nome Evento / Concorso *</div><input class="adi" id="rg-event" placeholder="EVORA FITNESS EXPO 2026 — Gratta & Vinci"/></div>
-          <div class="adf" style="grid-column:1/-1"><div class="adl">Nome Fiera / Luogo</div><input class="adi" id="rg-venue" placeholder="Rimini Wellness 2026 — Fiera di Rimini, Pad. B3"/></div>
+          <div class="adf"><div class="adl">Ragione Sociale *</div><input class="adi" id="rg-name" placeholder="Evora S.r.l." oninput="schedSave()"/></div>
+          <div class="adf"><div class="adl">Partita IVA *</div><input class="adi" id="rg-vat" placeholder="IT12345678901" oninput="schedSave()"/></div>
+          <div class="adf" style="grid-column:1/-1"><div class="adl">Sede Legale</div><input class="adi" id="rg-addr" placeholder="Via Roma 1, 20100 Milano (MI)" oninput="schedSave()"/></div>
+          <div class="adf"><div class="adl">Città (Foro Competente) *</div><input class="adi" id="rg-city" placeholder="Milano" oninput="schedSave()"/></div>
+          <div class="adf"><div class="adl">Email Privacy</div><input class="adi" id="rg-email" placeholder="privacy@evora.it" oninput="schedSave()"/></div>
+          <div class="adf" style="grid-column:1/-1"><div class="adl">Nome Evento / Concorso *</div><input class="adi" id="rg-event" placeholder="EVORA FITNESS EXPO 2026 — Gratta &amp; Vinci" oninput="schedSave()"/></div>
+          <div class="adf" style="grid-column:1/-1"><div class="adl">Nome Fiera / Luogo</div><input class="adi" id="rg-venue" placeholder="Rimini Wellness 2026 — Fiera di Rimini, Pad. B3" oninput="schedSave()"/></div>
         </div>
       </div>
       <div style="font-family:var(--fd);font-size:12px;letter-spacing:3px;color:var(--red);text-transform:uppercase;margin-bottom:12px">CONFIGURAZIONE 4 GIORNI</div>
-      <div id="reg-days">
-        <div style="color:var(--g);font-size:13px">Salva prima i premi, poi torna qui per configurare i giorni.</div>
-      </div>
+      <div id="reg-days"><div style="color:var(--g);font-size:13px">Salva prima i premi, poi clicca "Carica giorni".</div></div>
       <div class="abr" style="margin-top:16px">
-        <button class="adbb" onclick="loadRegDays()">↺ Carica giorni da premi</button>
+        <button class="adbb o" onclick="loadRegDays()">↺ Carica giorni da premi</button>
       </div>
       <div id="reg-seq-section" class="hidden" style="margin-top:20px;padding-top:20px;border-top:1px solid var(--b)">
         <div style="padding:14px;background:rgba(178,34,34,.06);border:1px solid rgba(178,34,34,.2);font-size:13px;color:#aaa;margin-bottom:16px;line-height:1.7">
-          ⚠️ Una volta generata la sequenza, viene <strong style="color:var(--w)">bloccata</strong> e non può essere modificata. Scarica e conserva i file come allegati al regolamento.
+          ⚠️ Una volta generata la sequenza, viene <strong style="color:var(--w)">bloccata</strong>. Scarica e conserva i file come allegati al regolamento.
         </div>
         <div class="abr">
-          <button class="adbb" onclick="generateRegulation()">🎲 Genera Sequenze & Regolamento</button>
+          <button class="adbb" onclick="generateRegulation()">🎲 Genera Sequenze &amp; Regolamento</button>
         </div>
       </div>
       <div id="reg-output" class="hidden" style="margin-top:20px;padding-top:20px;border-top:1px solid var(--b)">
         <div style="background:rgba(78,205,196,.08);border:1px solid rgba(78,205,196,.3);padding:14px;font-size:13px;color:#4ecdc4;margin-bottom:16px">
-          🔒 Sequenze generate e bloccate
+          🔒 Sequenze generate e salvate su Firebase
         </div>
         <div id="reg-day-previews"></div>
         <div class="abr">
@@ -450,7 +551,10 @@
       <div class="adsv" id="reg-msg"></div>
     </div>
   </div>
+
 </div>
+
+<!-- MODAL CONFIRM DELIVERY -->
 <div class="mb hidden" id="cmodal">
   <div class="mbx">
     <div class="mbt">CONFERMA</div>
@@ -461,18 +565,40 @@
     </div>
   </div>
 </div>
+
 <script>
+// ── STATE ─────────────────────────────────────────────────────────────────
 let PWD={staff:'staff',admin:'admin'};
 let cUser=null,cAsgn=null,allAsgn=[],cFlt='all',cSrch='',pendId=null;
 let scanStream=null,scanActive=false,rtUnsub=null,admPrizes=[];
+
 const params=new URLSearchParams(window.location.search);
 const uName=params.get('name')||params.get('first_name')||'Ospite';
 const uEmail=params.get('email')||'';
 const uToken=params.get('token')||`demo_${Date.now()}`;
+
+// ── REGULATION STATE ──────────────────────────────────────────────────────
+const DEFAULT_DATES=['2026-05-28','2026-05-29','2026-05-30','2026-05-31'];
+let regDays=DEFAULT_DATES.map(date=>({date,dist:[]}));
+let regSequences=[[],[],[],[]];
+let regLocked=false;
+let saveTimer=null;
+
+// ── BOOT ──────────────────────────────────────────────────────────────────
 window.addEventListener('db-ready',async()=>{
   cUser={token:uToken,name:uName,email:uEmail};
   try{const p=await window.DB.getConfig('passwords');if(p)PWD=p;}catch(e){}
-  initRegModalDefault();
+  // Load saved regulation for modal use
+  try{
+    const reg=await window.DB.getConfig('regulation');
+    if(reg){
+      if(reg.regSequences) regSequences=reg.regSequences;
+      if(reg.regDays) regDays=reg.regDays;
+      if(reg.regLocked) regLocked=reg.regLocked;
+      if(reg.admPrizes) admPrizes=reg.admPrizes;
+    }
+  }catch(e){}
+  buildRegulationModalText();
   document.getElementById('loader').style.opacity='0';
   setTimeout(()=>{
     document.getElementById('loader').style.display='none';
@@ -483,91 +609,115 @@ window.addEventListener('db-ready',async()=>{
     else showWelcome();
   },400);
 });
-function hideAll(){['pg-welcome','pg-game','pg-result','pg-ty','pg-login-staff','pg-login-admin','pg-staff','pg-admin'].forEach(id=>{const e=document.getElementById(id);e.classList.add('hidden');e.style.display='';});}
+
+// ── PAGE NAV ──────────────────────────────────────────────────────────────
+function hideAll(){
+  ['pg-welcome','pg-game','pg-result','pg-ty','pg-login-staff','pg-login-admin','pg-staff','pg-admin'].forEach(id=>{
+    const e=document.getElementById(id);
+    e.classList.add('hidden');e.style.display='';
+  });
+}
 function show(id,flex=false){const e=document.getElementById(id);e.classList.remove('hidden');if(flex)e.style.display='flex';}
+function showFooter(){document.getElementById('footer').classList.remove('hidden');}
+function hideFooter(){document.getElementById('footer').classList.add('hidden');}
+
 function showWelcome(){hideAll();stopCamera();if(rtUnsub){rtUnsub();rtUnsub=null;}document.getElementById('uname').textContent=cUser.name;show('pg-welcome');showFooter();}
 function goHome(){showWelcome();}
 function showLoginStaff(){hideAll();const e=document.getElementById('pg-login-staff');e.classList.remove('hidden');e.style.display='flex';document.getElementById('spwd').value='';document.getElementById('serr').textContent='';showFooter();}
 function showLoginAdmin(){hideAll();const e=document.getElementById('pg-login-admin');e.classList.remove('hidden');e.style.display='flex';document.getElementById('apwd').value='';document.getElementById('aerr').textContent='';showFooter();}
-function showFooter(){document.getElementById('footer').classList.remove('hidden');}
-function hideFooter(){document.getElementById('footer').classList.add('hidden');}
-let regModalText='';
-function openRegModal(){document.getElementById('reg-modal').classList.remove('hidden');document.body.style.overflow='hidden';}
-function closeRegModal(){document.getElementById('reg-modal').classList.add('hidden');document.body.style.overflow='';}
-function openPrivacyModal(){
-  document.getElementById('reg-modal-title').textContent='PRIVACY';
-  document.getElementById('reg-modal-content').innerHTML=`
-    <h3>Titolare del Trattamento</h3>
-    <p id="prv-owner">Evora — vedi sezione Admin per i dati completi.</p>
-    <h3>Dati Raccolti</h3>
-    <p>Nome, cognome, indirizzo email forniti durante la registrazione.</p>
-    <h3>Finalità</h3>
-    <p>Gestione del concorso promozionale e, previo consenso, comunicazioni di marketing.</p>
-    <h3>Conservazione</h3>
-    <p>I dati sono conservati per il tempo strettamente necessario alle finalità indicate.</p>
-    <h3>Diritti dell'Interessato</h3>
-    <p>Puoi esercitare i tuoi diritti (accesso, rettifica, cancellazione) contattando il titolare.</p>
-    <h3>Base Giuridica</h3>
-    <p>Consenso dell'interessato ai sensi del Regolamento UE 2016/679 (GDPR).</p>`;
-  document.getElementById('reg-modal').classList.remove('hidden');
-  document.body.style.overflow='hidden';
-}
-document.addEventListener('keydown',e=>{if(e.key==='Escape')closeRegModal();});
-function buildRegulationModalText(){
-  const co={name:document.getElementById('rg-name')?.value||'',city:document.getElementById('rg-city')?.value||''};
-  const ev={name:document.getElementById('rg-event')?.value||'Concorso a premi',venue:document.getElementById('rg-venue')?.value||''};
-  const today=new Date().toLocaleDateString('it-IT');
-  const seqHtml=regSequences.map((seq,i)=>seq.length>0?`
-    <h3>Sequenza Giorno ${i+1} — ${regDays[i].date||'—'} (${seq.length} premi)</h3>
-    <div style="background:#0a0a0a;border:1px solid #2a2a2a;max-height:200px;overflow-y:auto;margin-bottom:8px">
-      <table style="width:100%;border-collapse:collapse;font-size:12px">
-        ${seq.map((p,idx)=>`<tr style="border-bottom:1px solid #1a1a1a">
-          <td style="padding:5px 10px;color:#555;font-family:var(--fd);width:36px">${idx+1}</td>
-          <td style="padding:5px 6px">${p.emoji||'🎁'}</td>
-          <td style="padding:5px 10px;color:#ccc">${p.name}</td>
-          <td style="padding:5px 10px;color:#555;text-align:right">€${parseFloat(p.value||0).toFixed(2)}</td>
-        </tr>`).join('')}
-      </table>
-    </div>`:'').join('');
-  document.getElementById('reg-modal-title').textContent='REGOLAMENTO';
-  document.getElementById('reg-modal-content').innerHTML=`
-    <h3>Art. 1 — Soggetto Promotore</h3>
-    <p><strong>${co.name||'Evora'}</strong> organizza il presente concorso a premi ai sensi del D.P.R. 430/2001.</p>
-    <h3>Art. 2 — Oggetto</h3>
-    <p>Operazione a premi denominata <strong>"${ev.name}"</strong> in occasione di ${ev.venue||'evento fieristico'}.</p>
-    <h3>Art. 3 — Partecipazione</h3>
-    <p>Possono partecipare le persone fisiche maggiorenni che compilano il modulo di registrazione e partecipano al gioco digitale. <strong>Ogni persona può partecipare una sola volta.</strong></p>
-    <h3>Art. 4 — Periodo</h3>
-    <p>L'operazione si svolge nei giorni: ${regDays.map((d,i)=>d.date?`<strong>${d.date}</strong>`:'').filter(Boolean).join(', ')||'indicati nello stand'}.</p>
-    <h3>Art. 5 — Premi Disponibili</h3>
-    <p>${admPrizes.map(p=>`${p.emoji||''} <strong>${p.name}</strong> × ${p.qty} (€${parseFloat(p.value||0).toFixed(2)} cad.)`).join(' &nbsp;·&nbsp; ')||'Vedi stand Evora'}. I premi non sono convertibili in denaro.</p>
-    <h3>Art. 6 — Meccanismo di Assegnazione</h3>
-    <p>I premi sono assegnati tramite <strong>sequenza predeterminata</strong> generata prima dell'evento con algoritmo Fisher-Yates deterministico. L'assegnazione segue l'ordine di partecipazione giornaliero.</p>
-    ${regSequences.some(s=>s.length>0)?`<h3>Art. 7 — Sequenze di Distribuzione</h3><p>Le sequenze complete dei premi per ogni giornata sono riportate di seguito:</p>${seqHtml}`:''}
-    <h3>${regSequences.some(s=>s.length>0)?'Art. 8':'Art. 7'} — Consegna</h3>
-    <p>I premi vengono consegnati immediatamente presso lo stand, previa verifica del codice univoco assegnato.</p>
-    <h3>${regSequences.some(s=>s.length>0)?'Art. 9':'Art. 8'} — Privacy</h3>
-    <p>I dati personali sono trattati ai sensi del GDPR UE 2016/679 per gestione del concorso e, previo consenso, per marketing.</p>
-    <h3>${regSequences.some(s=>s.length>0)?'Art. 10':'Art. 9'} — Foro Competente</h3>
-    <p>Foro competente: <strong>${co.city||'indicato nel regolamento completo'}</strong>. Normativa: D.P.R. 430/2001.</p>
-    <p style="margin-top:16px;font-size:11px;color:#555">Generato il ${today}. Il documento completo con allegati è disponibile nell'area Admin.</p>`;
-}
-function initRegModalDefault(){
-  document.getElementById('reg-modal-content').innerHTML=`
-    <h3>Come funziona</h3>
-    <p>Gratta il biglietto digitale per scoprire il tuo premio. Il premio è assegnato in base a una sequenza predeterminata prima dell'evento.</p>
-    <h3>Partecipazione</h3>
-    <p>Ogni persona può partecipare <strong>una sola volta</strong>. La partecipazione è gratuita e riservata ai maggiorenni.</p>
-    <h3>Premi</h3>
-    <p>I premi sono fisici e vengono consegnati immediatamente allo stand Evora. Non sono convertibili in denaro.</p>
-    <h3>Privacy</h3>
-    <p>I dati forniti durante la registrazione saranno trattati ai sensi del GDPR UE 2016/679. Per il testo completo della privacy, clicca su "Privacy" nel menu.</p>
-    <p style="font-size:11px;color:#555;margin-top:16px">Il regolamento completo con tutti i dettagli legali è disponibile presso lo stand Evora.</p>`;
-}
 function chkStaff(){if(document.getElementById('spwd').value===PWD.staff)showStaff();else document.getElementById('serr').textContent='Password errata';}
 function chkAdmin(){if(document.getElementById('apwd').value===PWD.admin)showAdminPage();else document.getElementById('aerr').textContent='Password errata';}
 function logoutStaff(){stopCamera();showWelcome();}
 function logoutAdmin(){showWelcome();}
+
+// ── REGULATION MODAL ──────────────────────────────────────────────────────
+function openRegModal(){
+  document.getElementById('reg-modal-title').textContent='REGOLAMENTO';
+  document.getElementById('reg-modal').classList.remove('hidden');
+  document.body.style.overflow='hidden';
+}
+function openPrivacyModal(){
+  document.getElementById('reg-modal-title').textContent='PRIVACY';
+  document.getElementById('reg-modal-content').innerHTML=`
+    <h3>Titolare del Trattamento</h3><p>Evora — vedi regolamento completo per i dati aziendali.</p>
+    <h3>Dati Raccolti</h3><p>Nome, cognome, email forniti durante la registrazione al concorso.</p>
+    <h3>Finalità</h3><p>Gestione del concorso promozionale e, previo consenso, comunicazioni di marketing.</p>
+    <h3>Conservazione</h3><p>I dati sono conservati per il tempo strettamente necessario alle finalità indicate.</p>
+    <h3>Diritti dell'Interessato</h3><p>Puoi esercitare i diritti di accesso, rettifica e cancellazione contattando il titolare.</p>
+    <h3>Base Giuridica</h3><p>Consenso dell'interessato ai sensi del Regolamento UE 2016/679 (GDPR).</p>`;
+  document.getElementById('reg-modal').classList.remove('hidden');
+  document.body.style.overflow='hidden';
+}
+function closeRegModal(){document.getElementById('reg-modal').classList.add('hidden');document.body.style.overflow='';}
+document.addEventListener('keydown',e=>{if(e.key==='Escape')closeRegModal();});
+
+// Build regulation modal content with full sequences, day tabs
+function buildRegulationModalText(){
+  const hasSeq=regSequences.some(s=>s&&s.length>0);
+  const evName=(document.getElementById('rg-event')?.value)||'Evora Fiera 2026';
+  const coName=(document.getElementById('rg-name')?.value)||'Evora';
+  const coCity=(document.getElementById('rg-city')?.value)||'';
+  const venue=(document.getElementById('rg-venue')?.value)||'evento fieristico';
+  const today=new Date().toLocaleDateString('it-IT');
+
+  const dayDates=regDays.map((d,i)=>d.date?`<strong>${d.date}</strong>`:'').filter(Boolean).join(', ')||'28–31 maggio 2026';
+  const prizesList=admPrizes.length
+    ? admPrizes.map(p=>`${p.emoji||''} <strong>${p.name}</strong> × ${p.qty}`).join(' · ')
+    : 'vedi stand Evora';
+
+  let seqHtml='';
+  if(hasSeq){
+    const tabs=regSequences.map((seq,i)=>seq&&seq.length>0
+      ? `<button class="reg-day-tab${i===0?' active':''}" onclick="switchRegDay(${i},this)">Giorno ${i+1}${regDays[i].date?' — '+regDays[i].date.slice(5):''}</button>`
+      : '').join('');
+    const panels=regSequences.map((seq,i)=>seq&&seq.length>0
+      ? `<div class="reg-day-seq${i===0?' active':''}" id="reg-seq-panel-${i}">
+          <div style="font-size:11px;color:#555;margin-bottom:6px;font-family:var(--fd);letter-spacing:1px">${seq.length} PREMI · SEED ${makeSeed(i,evName)}</div>
+          <div class="reg-seq-wrap">
+            <table class="reg-seq-table">
+              ${seq.map((p,idx)=>`<tr><td>${idx+1}</td><td>${p.emoji||'🎁'}</td><td>${p.name}</td><td>€${parseFloat(p.value||0).toFixed(2)}</td></tr>`).join('')}
+            </table>
+          </div>
+        </div>`
+      : '').join('');
+    seqHtml=`<h3>Art. 7 — Sequenze di Distribuzione</h3>
+      <p>Le sequenze complete dei premi per ogni giornata, generate con algoritmo deterministico, sono riportate di seguito:</p>
+      <div class="reg-day-tabs">${tabs}</div>
+      ${panels}`;
+  }
+
+  document.getElementById('reg-modal-content').innerHTML=`
+    <h3>Art. 1 — Soggetto Promotore</h3>
+    <p><strong>${coName}</strong> organizza il presente concorso a premi ai sensi del D.P.R. 430/2001.</p>
+    <h3>Art. 2 — Oggetto</h3>
+    <p>Operazione denominata <strong>"${evName}"</strong> con finalità promozionali in occasione di ${venue}.</p>
+    <h3>Art. 3 — Partecipazione</h3>
+    <p>Possono partecipare le persone fisiche maggiorenni che compilano il modulo di registrazione e partecipano al gioco digitale. <strong>Ogni persona può partecipare una sola volta.</strong></p>
+    <h3>Art. 4 — Periodo</h3>
+    <p>L'operazione si svolge nei giorni: ${dayDates}.</p>
+    <h3>Art. 5 — Premi Disponibili</h3>
+    <p>${prizesList}. I premi non sono convertibili in denaro e non sono cedibili a terzi.</p>
+    <h3>Art. 6 — Meccanismo di Assegnazione</h3>
+    <p>I premi sono assegnati tramite <strong>sequenza predeterminata</strong> generata prima dell'evento con algoritmo Fisher-Yates deterministico. L'assegnazione segue l'ordine di partecipazione giornaliero.</p>
+    ${seqHtml}
+    <h3>${hasSeq?'Art. 8':'Art. 7'} — Consegna</h3>
+    <p>I premi vengono consegnati immediatamente presso lo stand, previa verifica del codice univoco assegnato al partecipante.</p>
+    <h3>${hasSeq?'Art. 9':'Art. 8'} — Privacy</h3>
+    <p>I dati personali sono trattati ai sensi del GDPR UE 2016/679 per gestione del concorso e, previo consenso, per marketing. Per il testo completo clicca "Privacy".</p>
+    <h3>${hasSeq?'Art. 10':'Art. 9'} — Foro Competente</h3>
+    <p>Foro competente: <strong>${coCity||'indicato nel regolamento completo'}</strong>. Normativa: D.P.R. 430/2001.</p>
+    <p style="margin-top:14px;font-size:11px;color:#444">Documento generato il ${today}.</p>`;
+}
+
+function switchRegDay(idx,btn){
+  document.querySelectorAll('.reg-day-tab').forEach(b=>b.classList.remove('active'));
+  document.querySelectorAll('.reg-day-seq').forEach(p=>p.classList.remove('active'));
+  btn.classList.add('active');
+  const panel=document.getElementById(`reg-seq-panel-${idx}`);
+  if(panel) panel.classList.add('active');
+}
+
+// ── GAME ──────────────────────────────────────────────────────────────────
 async function doShowGame(){
   hideAll(); show('pg-game'); showFooter();
   try{
@@ -580,8 +730,9 @@ async function doShowGame(){
   document.getElementById('pn').textContent=cAsgn.prizeName;
   document.getElementById('pd').textContent=cAsgn.prizeDesc;
   initScratch();
-  rtUnsub=window.DB.listenAssignment(cUser.token,d=>{ if(d.status==='delivered') showTY(); });
+  rtUnsub=window.DB.listenAssignment(cUser.token,d=>{if(d.status==='delivered')showTY();});
 }
+
 function showResult(){
   hideAll(); show('pg-result'); showFooter();
   document.getElementById('rem').textContent=cAsgn.prizeEmoji;
@@ -594,8 +745,22 @@ function showResult(){
   if(navigator.vibrate)navigator.vibrate([0,80,40,160,40,80]);
   if(!rtUnsub)rtUnsub=window.DB.listenAssignment(cUser.token,d=>{if(d.status==='delivered')showTY();});
 }
-function showTY(){if(rtUnsub){rtUnsub();rtUnsub=null;}hideAll(); show('pg-ty');hideFooter();if(navigator.vibrate)navigator.vibrate([0,100,50,200,50,100]);}
-function copyCode(){if(!cAsgn)return;navigator.clipboard?.writeText(cAsgn.code);document.getElementById('cph').textContent='✓ copiato';if(navigator.vibrate)navigator.vibrate(40);setTimeout(()=>document.getElementById('cph').textContent='tocca per copiare',2000);}
+
+function showTY(){
+  if(rtUnsub){rtUnsub();rtUnsub=null;}
+  hideAll();show('pg-ty');hideFooter();
+  if(navigator.vibrate)navigator.vibrate([0,100,50,200,50,100]);
+}
+
+function copyCode(){
+  if(!cAsgn)return;
+  navigator.clipboard?.writeText(cAsgn.code);
+  document.getElementById('cph').textContent='✓ copiato';
+  if(navigator.vibrate)navigator.vibrate(40);
+  setTimeout(()=>document.getElementById('cph').textContent='tocca per copiare',2000);
+}
+
+// ── SCRATCH ───────────────────────────────────────────────────────────────
 function initScratch(){
   const cv=document.getElementById('scratch-canvas'),W=360,H=220;
   cv.width=W;cv.height=H;cv.style.height=H+'px';
@@ -632,6 +797,8 @@ function initScratch(){
   cv.addEventListener('touchmove', e=>{e.preventDefault();if(!drw)return;const[x,y]=xy(e);sc(x,y);},{passive:false});
   cv.addEventListener('touchend',  ()=>{drw=false;lx=null;ly=null;});
 }
+
+// ── PARTICLES ─────────────────────────────────────────────────────────────
 function fireParticles(){
   const r=document.getElementById('glow');r.classList.remove('active');void r.offsetWidth;r.classList.add('active');
   const cv=document.getElementById('pcv');cv.style.display='block';cv.width=window.innerWidth;cv.height=window.innerHeight;
@@ -640,95 +807,417 @@ function fireParticles(){
   const a=()=>{ctx.clearRect(0,0,cv.width,cv.height);ps=ps.filter(p=>p.life>0);ps.forEach(p=>{p.x+=p.vx;p.y+=p.vy;p.vy+=p.grav;p.vx*=.99;p.rot+=p.rotS;p.life-=p.decay;ctx.save();ctx.globalAlpha=Math.max(0,p.life);ctx.fillStyle=p.color;ctx.translate(p.x,p.y);ctx.rotate(p.rot*Math.PI/180);if(p.shape==='rect')ctx.fillRect(-p.size/2,-p.size/4,p.size,p.size/2);else{ctx.beginPath();ctx.arc(0,0,p.size/2,0,Math.PI*2);ctx.fill();}ctx.restore();});if(ps.length>0)requestAnimationFrame(a);else cv.style.display='none';};
   requestAnimationFrame(a);
 }
-async function showStaff(){hideAll(); hideFooter();const e=document.getElementById('pg-staff');e.classList.remove('hidden');e.style.display='block';document.getElementById('sv-list').classList.remove('hidden');document.getElementById('sv-scan').classList.add('hidden');await reloadDash();}
-async function reloadDash(){document.getElementById('alist').innerHTML='<div class="dld">Caricamento…</div>';try{allAsgn=await window.DB.getAllAssignments();const prizes=await window.DB.getPrizes();const del=allAsgn.filter(a=>a.status==='delivered').length;const rem=prizes.reduce((s,p)=>s+Math.max(0,p.qty-p.assigned),0);document.getElementById('s-tot').textContent=allAsgn.length;document.getElementById('s-pen').textContent=allAsgn.length-del;document.getElementById('s-del').textContent=del;document.getElementById('s-rem').textContent=rem;renderList();}catch(e){document.getElementById('alist').innerHTML='<div class="demp">Errore connessione</div>';}}
+
+// ── STAFF ─────────────────────────────────────────────────────────────────
+async function showStaff(){
+  hideAll();hideFooter();
+  const e=document.getElementById('pg-staff');e.classList.remove('hidden');e.style.display='block';
+  document.getElementById('sv-list').classList.remove('hidden');
+  document.getElementById('sv-scan').classList.add('hidden');
+  await reloadDash();
+}
+async function reloadDash(){
+  document.getElementById('alist').innerHTML='<div class="dld">Caricamento…</div>';
+  try{
+    allAsgn=await window.DB.getAllAssignments();
+    const prizes=await window.DB.getPrizes();
+    const del=allAsgn.filter(a=>a.status==='delivered').length;
+    const rem=prizes.reduce((s,p)=>s+Math.max(0,p.qty-p.assigned),0);
+    document.getElementById('s-tot').textContent=allAsgn.length;
+    document.getElementById('s-pen').textContent=allAsgn.length-del;
+    document.getElementById('s-del').textContent=del;
+    document.getElementById('s-rem').textContent=rem;
+    renderList();
+  }catch(e){document.getElementById('alist').innerHTML='<div class="demp">Errore connessione</div>';}
+}
 function setFlt(f,btn){cFlt=f;document.querySelectorAll('.dfb').forEach(b=>b.classList.remove('active'));btn.classList.add('active');renderList();}
 function fltList(q){cSrch=q.toLowerCase();renderList();}
-function renderList(){const list=document.getElementById('alist');let f=allAsgn.filter(a=>{if(cFlt==='pending'&&a.status!=='assigned')return false;if(cFlt==='delivered'&&a.status!=='delivered')return false;if(!cSrch)return true;return[a.userName,a.userEmail,a.prizeName,a.code].some(v=>v?.toLowerCase().includes(cSrch));});if(!f.length){list.innerHTML='<div class="demp">NESSUN RISULTATO</div>';return;}list.innerHTML=f.map(a=>`<div class="ac ${a.status==='delivered'?'done':''}"><div class="ae">${a.prizeEmoji}</div><div class="ai"><div class="an">${a.userName||a.userEmail||'—'}</div><div class="ap">${a.prizeName}</div><div class="acd">${a.code}</div></div><div style="display:flex;flex-direction:column;align-items:flex-end;gap:8px"><span class="abg ${a.status==='delivered'?'bad':'bap'}">${a.status==='delivered'?'✓ FATTO':'IN ATTESA'}</span><button class="abt" ${a.status==='delivered'?'disabled':''} onclick="openModal('${a.id}')">${a.status==='delivered'?'✓':'CONSEGNA'}</button></div></div>`).join('');}
-function openModal(id){const a=allAsgn.find(x=>x.id===id);if(!a)return;pendId=id;document.getElementById('mbody').innerHTML=`Consegnare:<br><br><strong style="font-size:17px;color:var(--w)">${a.prizeEmoji} ${a.prizeName}</strong><br>a <strong style="color:var(--w)">${a.userName||a.userEmail}</strong><br><br>Codice: <code style="color:var(--red);letter-spacing:2px">${a.code}</code><br><br><span style="color:#555;font-size:12px">⚠ Azione irreversibile.</span>`;document.getElementById('cmodal').classList.remove('hidden');}
+function renderList(){
+  const list=document.getElementById('alist');
+  let f=allAsgn.filter(a=>{
+    if(cFlt==='pending'&&a.status!=='assigned')return false;
+    if(cFlt==='delivered'&&a.status!=='delivered')return false;
+    if(!cSrch)return true;
+    return[a.userName,a.userEmail,a.prizeName,a.code].some(v=>v?.toLowerCase().includes(cSrch));
+  });
+  if(!f.length){list.innerHTML='<div class="demp">NESSUN RISULTATO</div>';return;}
+  list.innerHTML=f.map(a=>`<div class="ac ${a.status==='delivered'?'done':''}">
+    <div class="ae">${a.prizeEmoji}</div>
+    <div class="ai"><div class="an">${a.userName||a.userEmail||'—'}</div><div class="ap">${a.prizeName}</div><div class="acd">${a.code}</div></div>
+    <div style="display:flex;flex-direction:column;align-items:flex-end;gap:8px">
+      <span class="abg ${a.status==='delivered'?'bad':'bap'}">${a.status==='delivered'?'✓ FATTO':'IN ATTESA'}</span>
+      <button class="abt" ${a.status==='delivered'?'disabled':''} onclick="openModal('${a.id}')">
+        ${a.status==='delivered'?'✓':'CONSEGNA'}
+      </button>
+    </div></div>`).join('');
+}
+function openModal(id){
+  const a=allAsgn.find(x=>x.id===id);if(!a)return;pendId=id;
+  document.getElementById('mbody').innerHTML=`Consegnare:<br><br><strong style="font-size:17px;color:var(--w)">${a.prizeEmoji} ${a.prizeName}</strong><br>a <strong style="color:var(--w)">${a.userName||a.userEmail}</strong><br><br>Codice: <code style="color:var(--red);letter-spacing:2px">${a.code}</code><br><br><span style="color:#555;font-size:12px">⚠ Azione irreversibile.</span>`;
+  document.getElementById('cmodal').classList.remove('hidden');
+}
 function closeModal(){document.getElementById('cmodal').classList.add('hidden');pendId=null;}
 async function confirmDel(){if(!pendId)return;await window.DB.markDelivered(pendId);closeModal();await reloadDash();if(navigator.vibrate)navigator.vibrate([50,100,50]);}
-function showScan(){document.getElementById('sv-list').classList.add('hidden');document.getElementById('sv-scan').classList.remove('hidden');document.getElementById('scres').innerHTML='';document.getElementById('scerr').innerHTML='';document.getElementById('smin').value='';scanActive=true;startCam();}
+
+// ── SCANNER ───────────────────────────────────────────────────────────────
+function showScan(){
+  document.getElementById('sv-list').classList.add('hidden');
+  document.getElementById('sv-scan').classList.remove('hidden');
+  document.getElementById('scres').innerHTML='';
+  document.getElementById('scerr').innerHTML='';
+  document.getElementById('smin').value='';
+  scanActive=true;startCam();
+}
 function showList(){stopCamera();document.getElementById('sv-scan').classList.add('hidden');document.getElementById('sv-list').classList.remove('hidden');reloadDash();}
-async function startCam(){try{const s=await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'}});scanStream=s;const v=document.getElementById('scvid');v.srcObject=s;v.play();if('BarcodeDetector' in window){const det=new BarcodeDetector({formats:['qr_code']});const tick=async()=>{if(!scanActive)return;if(v.readyState===4){try{const c=await det.detect(v);if(c.length>0){hdlScan(c[0].rawValue);return;}}catch{}}requestAnimationFrame(tick);};requestAnimationFrame(tick);}else{document.getElementById('scerr').innerHTML='<div class="seb">Scanner non supportato. Usa il campo manuale.</div>';}}catch(e){document.getElementById('scerr').innerHTML='<div class="seb">Fotocamera non disponibile. Usa il campo manuale.</div>';}}
+async function startCam(){
+  try{
+    const s=await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'}});
+    scanStream=s;const v=document.getElementById('scvid');v.srcObject=s;v.play();
+    if('BarcodeDetector' in window){
+      const det=new BarcodeDetector({formats:['qr_code']});
+      const tick=async()=>{if(!scanActive)return;if(v.readyState===4){try{const c=await det.detect(v);if(c.length>0){hdlScan(c[0].rawValue);return;}}catch{}}requestAnimationFrame(tick);};
+      requestAnimationFrame(tick);
+    }else{document.getElementById('scerr').innerHTML='<div class="seb">Scanner non supportato. Usa il campo manuale.</div>';}
+  }catch(e){document.getElementById('scerr').innerHTML='<div class="seb">Fotocamera non disponibile. Usa il campo manuale.</div>';}
+}
 function stopCamera(){scanActive=false;if(scanStream){scanStream.getTracks().forEach(t=>t.stop());scanStream=null;}}
 function hdlMan(v){const c=v.toUpperCase().trim();if(c.length>=8){const f=allAsgn.find(a=>a.code===c);if(f)hdlScan(c);}}
-async function hdlScan(code){scanActive=false;stopCamera();const inp=document.getElementById('smin');inp.disabled=true;inp.style.opacity='.3';inp.value=code;const a=await window.DB.findByCode(code);if(navigator.vibrate)navigator.vibrate(a?[50,100,50]:[200]);const ct=document.getElementById('scres');if(!a){ct.innerHTML=`<div class="srs"><div style="color:#ff6b6b;font-size:14px;margin-bottom:16px">❌ Codice non trovato: <code style="letter-spacing:2px">${code}</code></div><button class="sag" onclick="rstScan()">🔁 Scansiona di nuovo</button></div>`;return;}if(a.status==='delivered'){ct.innerHTML=`<div class="srs"><div class="sre">${a.prizeEmoji}</div><div class="srp">${a.prizeName}</div><div class="sru">${a.userName||a.userEmail||'—'}</div><div class="src">${a.code}</div><span class="srs2" style="background:rgba(255,255,255,.06);color:#666">✓ GIÀ CONSEGNATO</span><div style="color:#555;font-size:12px;padding:8px 0 16px">Premio già consegnato in precedenza.</div><button class="sag" onclick="rstScan()">🔁 Scansiona di nuovo</button></div>`;return;}ct.innerHTML=`<div class="srs"><div class="sre">${a.prizeEmoji}</div><div class="srp">${a.prizeName}</div><div class="sru">${a.userName||a.userEmail||'—'}</div><div class="src">${a.code}</div><span class="srs2" style="background:rgba(178,34,34,.15);color:var(--red)">⏳ DA CONSEGNARE</span><br><button class="sdl" id="sdlbtn" onclick="scnDel('${a.userToken}')">SEGNA CONSEGNATO</button><div style="color:#555;font-size:11px;text-align:center;margin-top:10px;letter-spacing:1px;font-family:var(--fd)">CONFERMA LA CONSEGNA PRIMA DI SCANSIONARE IL PROSSIMO</div></div>`;document.getElementById('scn-back-btn').style.display='none';}
-async function scnDel(token){const btn=document.getElementById('sdlbtn');if(btn){btn.textContent='…';btn.disabled=true;}await window.DB.markDelivered(token);if(navigator.vibrate)navigator.vibrate([0,80,40,160]);allAsgn=await window.DB.getAllAssignments();const ct=document.getElementById('scres');ct.innerHTML=`<div class="srs" style="text-align:center;padding:28px 20px"><div style="font-size:52px;margin-bottom:12px">✅</div><div style="font-family:var(--fd);font-size:28px;font-weight:800;letter-spacing:2px;color:#4ecdc4">CONSEGNATO</div><div style="color:var(--g);font-size:13px;margin-top:8px">Premio registrato con successo</div></div>`;document.getElementById('scn-back-btn').style.display='';setTimeout(()=>rstScan(),1800);}
-function rstScan(){document.getElementById('scres').innerHTML='';const inp=document.getElementById('smin');inp.disabled=false;inp.style.opacity='1';inp.value='';document.getElementById('scn-back-btn').style.display='';scanActive=true;startCam();}
-async function showAdminPage(){hideAll();hideFooter();const e=document.getElementById('pg-admin');e.classList.remove('hidden');e.style.display='block';await loadPrizes();await loadRegulationConfig();await loadStats();}
+async function hdlScan(code){
+  scanActive=false;stopCamera();
+  const inp=document.getElementById('smin');inp.disabled=true;inp.style.opacity='.3';inp.value=code;
+  const a=await window.DB.findByCode(code);
+  if(navigator.vibrate)navigator.vibrate(a?[50,100,50]:[200]);
+  const ct=document.getElementById('scres');
+  if(!a){ct.innerHTML=`<div class="srs"><div style="color:#ff6b6b;font-size:14px;margin-bottom:16px">❌ Codice non trovato: <code style="letter-spacing:2px">${code}</code></div><button class="sag" onclick="rstScan()">🔁 Scansiona di nuovo</button></div>`;return;}
+  if(a.status==='delivered'){ct.innerHTML=`<div class="srs"><div class="sre">${a.prizeEmoji}</div><div class="srp">${a.prizeName}</div><div class="sru">${a.userName||a.userEmail||'—'}</div><div class="src">${a.code}</div><span class="srs2" style="background:rgba(255,255,255,.06);color:#666">✓ GIÀ CONSEGNATO</span><div style="color:#555;font-size:12px;padding:8px 0 16px">Premio già consegnato in precedenza.</div><button class="sag" onclick="rstScan()">🔁 Scansiona di nuovo</button></div>`;return;}
+  ct.innerHTML=`<div class="srs"><div class="sre">${a.prizeEmoji}</div><div class="srp">${a.prizeName}</div><div class="sru">${a.userName||a.userEmail||'—'}</div><div class="src">${a.code}</div><span class="srs2" style="background:rgba(178,34,34,.15);color:var(--red)">⏳ DA CONSEGNARE</span><br><button class="sdl" id="sdlbtn" onclick="scnDel('${a.userToken}')">SEGNA CONSEGNATO</button><div style="color:#555;font-size:11px;text-align:center;margin-top:10px;letter-spacing:1px;font-family:var(--fd)">CONFERMA LA CONSEGNA PRIMA DI SCANSIONARE IL PROSSIMO</div></div>`;
+  document.getElementById('scn-back-btn').style.display='none';
+}
+async function scnDel(token){
+  const btn=document.getElementById('sdlbtn');if(btn){btn.textContent='…';btn.disabled=true;}
+  await window.DB.markDelivered(token);
+  if(navigator.vibrate)navigator.vibrate([0,80,40,160]);
+  allAsgn=await window.DB.getAllAssignments();
+  const ct=document.getElementById('scres');
+  ct.innerHTML=`<div class="srs" style="text-align:center;padding:28px 20px"><div style="font-size:52px;margin-bottom:12px">✅</div><div style="font-family:var(--fd);font-size:28px;font-weight:800;letter-spacing:2px;color:#4ecdc4">CONSEGNATO</div><div style="color:var(--g);font-size:13px;margin-top:8px">Premio registrato con successo</div></div>`;
+  document.getElementById('scn-back-btn').style.display='';
+  setTimeout(()=>rstScan(),1800);
+}
+function rstScan(){
+  document.getElementById('scres').innerHTML='';
+  const inp=document.getElementById('smin');inp.disabled=false;inp.style.opacity='1';inp.value='';
+  document.getElementById('scn-back-btn').style.display='';
+  scanActive=true;startCam();
+}
+
+// ── ADMIN ─────────────────────────────────────────────────────────────────
+async function showAdminPage(){
+  hideAll();hideFooter();
+  const e=document.getElementById('pg-admin');e.classList.remove('hidden');e.style.display='block';
+  await loadPrizes();
+  await loadRegulationConfig();
+  await loadStats();
+}
 async function loadPrizes(){try{admPrizes=await window.DB.getPrizes();renderPCfg();}catch(e){}}
-function renderPCfg(){document.getElementById('pcfg').innerHTML=admPrizes.map((p,i)=>`<div class="prr"><input class="pri" type="text" value="${p.name||''}" placeholder="Nome premio" onchange="admPrizes[${i}].name=this.value"/><input class="pri c" type="number" value="${p.qty||0}" min="0" onchange="admPrizes[${i}].qty=parseInt(this.value)||0"/><input class="pri" type="number" value="${p.value||0}" min="0" step="0.01" onchange="admPrizes[${i}].value=parseFloat(this.value)||0"/><button class="prd" onclick="rmPrize(${i})">🗑</button></div>`).join('');}
+function renderPCfg(){
+  document.getElementById('pcfg').innerHTML=admPrizes.map((p,i)=>`
+    <div class="prr">
+      <input class="pri" type="text" value="${p.name||''}" placeholder="Nome premio" onchange="admPrizes[${i}].name=this.value"/>
+      <input class="pri c" type="number" value="${p.qty||0}" min="0" onchange="admPrizes[${i}].qty=parseInt(this.value)||0"/>
+      <input class="pri" type="number" value="${p.value||0}" min="0" step="0.01" onchange="admPrizes[${i}].value=parseFloat(this.value)||0"/>
+      <button class="prd" onclick="rmPrize(${i})">🗑</button>
+    </div>`).join('');
+}
 function addPrize(){admPrizes.push({id:'p'+Date.now(),name:'',emoji:'🎁',color:'#B22222',desc:'',qty:1,assigned:0,order:admPrizes.length+1,value:0});renderPCfg();}
 function rmPrize(i){admPrizes.splice(i,1);admPrizes.forEach((p,j)=>p.order=j+1);renderPCfg();}
 function emojiFor(n=''){const m={zaino:'🎒',shirt:'👕',tshirt:'👕',sconto:'💸',shaker:'🥤',gadget:'🎁',borraccia:'💧',cappello:'🧢'};const k=Object.keys(m).find(k=>n.toLowerCase().includes(k));return k?m[k]:'🎁';}
-async function savePrizes(){const msg=document.getElementById('psv');msg.textContent='Salvataggio…';try{const list=admPrizes.map((p,i)=>({...p,order:i+1,emoji:emojiFor(p.name),desc:p.desc||p.name,assigned:p.assigned||0}));await window.DB.savePrizes(list);admPrizes=list;await loadRegDays();await saveRegulationConfig();msg.textContent='✓ Premi salvati';setTimeout(()=>msg.textContent='',3000);}catch(e){msg.textContent='❌ Errore salvataggio';}}
-async function savePwds(){const ns=document.getElementById('nsp').value.trim(),na=document.getElementById('nap').value.trim();const msg=document.getElementById('pwsv');if(ns)PWD.staff=ns;if(na)PWD.admin=na;try{await window.DB.saveConfig('passwords',PWD);msg.textContent='✓ Password aggiornate';document.getElementById('nsp').value='';document.getElementById('nap').value='';setTimeout(()=>msg.textContent='',3000);}catch(e){msg.textContent='❌ Errore salvataggio';}}
-const DEFAULT_DATES=['2026-05-28','2026-05-29','2026-05-30','2026-05-31'];
-let regDays=DEFAULT_DATES.map(date=>({date,dist:[]}));
-let regSequences=[[],[],[],[]];
-let regLocked=false;
-async function saveRegulationConfig(){
-  const payload = {
-    company: {
-      name: document.getElementById('rg-name')?.value || '',
-      vat: document.getElementById('rg-vat')?.value || '',
-      addr: document.getElementById('rg-addr')?.value || '',
-      city: document.getElementById('rg-city')?.value || '',
-      email: document.getElementById('rg-email')?.value || ''
-    },
-    event: {
-      name: document.getElementById('rg-event')?.value || '',
-      venue: document.getElementById('rg-venue')?.value || ''
-    },
-    regDays,
-    regSequences,
-    regLocked
-  };
-  await window.DB.saveConfig('regulation', payload);
+async function savePrizes(){
+  const msg=document.getElementById('psv');msg.textContent='Salvataggio…';
+  try{
+    const list=admPrizes.map((p,i)=>({...p,order:i+1,emoji:emojiFor(p.name),desc:p.desc||p.name,assigned:p.assigned||0}));
+    await window.DB.savePrizes(list);
+    admPrizes=list;
+    await loadRegDays();
+    await saveRegulationConfig();
+    msg.textContent='✓ Premi salvati';setTimeout(()=>msg.textContent='',3000);
+  }catch(e){msg.textContent='❌ Errore salvataggio';}
 }
-async function loadRegulationConfig(){
-  const data = await window.DB.getConfig('regulation');
-  if(!data) return;
-  if(data.company){
-    document.getElementById('rg-name').value = data.company.name || '';
-    document.getElementById('rg-vat').value = data.company.vat || '';
-    document.getElementById('rg-addr').value = data.company.addr || '';
-    document.getElementById('rg-city').value = data.company.city || '';
-    document.getElementById('rg-email').value = data.company.email || '';
-  }
-  if(data.event){
-    document.getElementById('rg-event').value = data.event.name || '';
-    document.getElementById('rg-venue').value = data.event.venue || '';
-  }
-  regDays = data.regDays || DEFAULT_DATES.map(date=>({date,dist:[]}));
-  regSequences = data.regSequences || [[],[],[],[]];
-  regLocked = !!data.regLocked;
-  if(regDays.length===0){regDays=DEFAULT_DATES.map(date=>({date,dist:[]}));}
-  renderRegDays();
-  if(regDays.some(d => (d.dist||[]).length>0)) document.getElementById('reg-seq-section').classList.remove('hidden');
-  if(regSequences.some(day => day && day.length > 0)){
-    renderRegOutput();
-    document.getElementById('reg-output').classList.remove('hidden');
-    buildRegulationModalText();
+async function savePwds(){
+  const ns=document.getElementById('nsp').value.trim(),na=document.getElementById('nap').value.trim();
+  const msg=document.getElementById('pwsv');
+  if(ns)PWD.staff=ns;if(na)PWD.admin=na;
+  try{await window.DB.saveConfig('passwords',PWD);msg.textContent='✓ Password aggiornate';document.getElementById('nsp').value='';document.getElementById('nap').value='';setTimeout(()=>msg.textContent='',3000);}
+  catch(e){msg.textContent='❌ Errore salvataggio';}
+}
+
+// ── RESET (two-step, uses deleteDoc via window.DB.resetAll) ────────────────
+let resetStep=0;
+function confirmReset(){
+  const msg=document.getElementById('reset-msg');
+  const btn=document.getElementById('reset-btn');
+  if(resetStep===0){
+    resetStep=1;
+    btn.textContent='⚠ SICURO? CLICCA DI NUOVO PER CONFERMARE';
+    btn.style.background='#cc2222';
+    msg.textContent='Clicca di nuovo entro 5 secondi per confermare.';
+    msg.style.color='#ff6b6b';
+    setTimeout(()=>{
+      if(resetStep===1){
+        resetStep=0;
+        btn.textContent='🗑 RESET COMPLETO DATI';
+        btn.style.background='#8b1a1a';
+        msg.textContent='';
+      }
+    },5000);
+  } else {
+    resetStep=0;
+    btn.textContent='🗑 RESET COMPLETO DATI';
+    btn.style.background='#8b1a1a';
+    btn.disabled=true;
+    msg.textContent='Reset in corso…';msg.style.color='#aaa';
+    window.DB.resetAll()
+      .then(async()=>{
+        btn.disabled=false;
+        msg.textContent='✓ Reset completato. Tutti i dati di gioco eliminati.';
+        msg.style.color='#4ecdc4';
+        setTimeout(()=>msg.textContent='',5000);
+        await loadStats();
+      })
+      .catch(err=>{
+        btn.disabled=false;
+        msg.textContent='❌ Errore: '+err.message;
+        msg.style.color='#ff6b6b';
+      });
   }
 }
+
+// ── REGULATION ────────────────────────────────────────────────────────────
 function seededRnd(seed){let s=seed;return()=>{s=(s*1664525+1013904223)&0xffffffff;return(s>>>0)/0xffffffff;};}
 function seededShuffle(arr,seed){const a=[...arr];const r=seededRnd(seed);for(let i=a.length-1;i>0;i--){const j=Math.floor(r()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a;}
 function makeSeed(dayIdx,name){let h=0;const s=`${name}_day${dayIdx}_2026`;for(let i=0;i<s.length;i++){h=((h<<5)-h)+s.charCodeAt(i);h|=0;}return Math.abs(h);}
-async function loadRegDays(){const prizes=await window.DB.getPrizes();if(!prizes.length){document.getElementById('reg-days').innerHTML='<div style="color:#ff6b6b;font-size:13px">Nessun premio configurato. Salva prima i premi nella sezione Premi.</div>';return;}regDays=regDays.map((d,dayIdx)=>({...d,dist:prizes.map(p=>{const base=Math.floor(p.qty/4);const extra=dayIdx<(p.qty%4)?1:0;return{id:p.id,name:p.name,emoji:p.emoji||'🎁',value:p.value||0,totalQty:p.qty,dayQty:base+extra};})}));renderRegDays();document.getElementById('reg-seq-section').classList.remove('hidden');}
-function renderRegDays(){const html=regDays.map((d,i)=>`<div style="background:var(--s2);border:1px solid var(--b);padding:16px;margin-bottom:12px;border-left:3px solid var(--red)"><div style="display:flex;align-items:center;gap:12px;margin-bottom:14px"><div style="font-family:var(--fd);font-size:16px;font-weight:700;letter-spacing:2px;color:var(--w);flex-shrink:0">GIORNO ${i+1}</div><input type="date" value="${d.date||''}" onchange="regDays[${i}].date=this.value; saveRegulationConfig()" style="padding:8px 12px;background:#0a0a0a;border:1px solid var(--b);color:var(--w);font-family:var(--fb);font-size:13px;flex:1;min-width:0"/></div><div style="font-family:var(--fd);font-size:10px;letter-spacing:2px;color:var(--g);margin-bottom:10px;text-transform:uppercase">Quantità per premio in questo giorno</div>${(d.dist||[]).map((p,pi)=>`<div style="display:grid;grid-template-columns:1fr auto 80px auto;align-items:center;gap:10px;margin-bottom:8px"><div style="display:flex;align-items:center;gap:8px;min-width:0"><span style="font-size:16px;flex-shrink:0">${p.emoji}</span><span style="font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${p.name}</span></div><span style="font-size:11px;color:var(--g);white-space:nowrap">tot. ${p.totalQty}</span><input type="number" min="0" max="${p.totalQty}" value="${parseInt(p.dayQty)||0}" style="padding:7px 10px;background:#0a0a0a;border:1px solid var(--b);color:var(--w);font-family:var(--fb);font-size:13px;text-align:center;width:100%" oninput="regDays[${i}].dist[${pi}].dayQty=parseInt(this.value)||0;updateRegDayTotals(${i});saveRegulationConfig()"/><span style="font-size:11px;color:var(--g);white-space:nowrap" id="reg-rem-${i}-${pi}"></span></div>`).join('')}<div style="display:flex;align-items:center;justify-content:space-between;margin-top:10px;padding-top:10px;border-top:1px solid var(--b)"><span style="font-size:12px;color:var(--g)">Premi questo giorno:</span><span style="font-family:var(--fd);font-size:16px;font-weight:700" id="reg-day-tot-${i}">0</span></div><div id="reg-day-err-${i}" style="font-size:12px;color:#ff6b6b;margin-top:6px;min-height:16px"></div></div>`).join('');document.getElementById('reg-days').innerHTML=html;regDays.forEach((_,i)=>updateRegDayTotals(i));updateRegGrandValidation();}
-function updateRegDayTotals(dayIdx){const d=regDays[dayIdx];const tot=(d.dist||[]).reduce((s,p)=>s+(parseInt(p.dayQty)||0),0);const el=document.getElementById(`reg-day-tot-${dayIdx}`);if(el)el.textContent=tot;updateRegGrandValidation();}
-function updateRegGrandValidation(){if(!admPrizes.length)return;admPrizes.forEach((p,pi)=>{const assigned=regDays.reduce((s,d)=>s+(parseInt((d.dist||[])[pi]?.dayQty)||0),0);const remaining=p.qty-assigned;regDays.forEach((_,di)=>{const el=document.getElementById(`reg-rem-${di}-${pi}`);if(el)el.textContent=`rim. ${remaining}`;});regDays.forEach((d,di)=>{const errEl=document.getElementById(`reg-day-err-${di}`);if(errEl&&remaining<0){errEl.textContent=`⚠ Hai distribuito ${-remaining} in più rispetto al totale disponibile per "${p.name}"`;}else if(errEl&&remaining===0){errEl.textContent='';}});});const hasErrors=admPrizes.some((p,pi)=>{const assigned=regDays.reduce((s,d)=>s+(parseInt((d.dist||[])[pi]?.dayQty)||0),0);return assigned>p.qty;});const secBtn=document.querySelector('#reg-seq-section .adbb');if(secBtn){secBtn.style.opacity=hasErrors?'.4':'1';secBtn.style.pointerEvents=hasErrors?'none':'auto';}}
-async function generateRegulation(){let err=false;admPrizes.forEach((p,pi)=>{const assigned=regDays.reduce((s,d)=>s+(parseInt((d.dist||[])[pi]?.dayQty)||0),0);if(assigned>p.qty){err=true;}});if(err){alert('Errore: hai distribuito più premi del totale disponibile. Correggi prima le quantità.');return;}const name=document.getElementById('rg-event').value||'FITNESS EXPO 2026';regSequences=regDays.map((d,i)=>{const expanded=[];(d.dist||[]).forEach(p=>{for(let j=0;j<(parseInt(p.dayQty)||0);j++)expanded.push({name:p.name,emoji:p.emoji||'🎁',value:p.value||0});});return seededShuffle(expanded,makeSeed(i,name));});regLocked=true;renderRegOutput();document.getElementById('reg-output').classList.remove('hidden');document.getElementById('reg-msg').textContent='✓ Sequenze generate con successo';setTimeout(()=>document.getElementById('reg-msg').textContent='',3000);buildRegulationModalText();await saveRegulationConfig();}
-function renderRegOutput(){const name=document.getElementById('rg-event').value||'FITNESS EXPO 2026';document.getElementById('reg-day-previews').innerHTML=regSequences.map((seq,i)=>`<div style="margin-bottom:16px"><div style="display:flex;align-items:center;justify-content:space-between;background:var(--b);padding:10px 14px;border-radius:2px 2px 0 0"><div style="font-family:var(--fd);font-size:14px;font-weight:700;letter-spacing:2px">GIORNO ${i+1} — ${regDays[i].date||'—'}</div><div style="display:flex;align-items:center;gap:10px"><span style="font-family:var(--fd);font-size:11px;color:var(--g)">Seed: ${makeSeed(i,name)} · ${seq.length} premi</span><button onclick="downloadCSV(${i})" style="padding:5px 12px;background:var(--red);color:white;border:none;font-family:var(--fd);font-size:11px;letter-spacing:1px;cursor:pointer">⬇ CSV</button></div></div><div style="max-height:260px;overflow-y:auto;border:1px solid var(--b);border-top:none"><table style="width:100%;border-collapse:collapse;font-size:12px"><thead><tr style="background:#0d0d0d"><th style="padding:7px 12px;text-align:left;color:var(--g);font-family:var(--fd);letter-spacing:1px;width:50px">#</th><th style="padding:7px 12px;text-align:left;color:var(--g);font-family:var(--fd);letter-spacing:1px;width:30px"></th><th style="padding:7px 12px;text-align:left;color:var(--g);font-family:var(--fd);letter-spacing:1px">Premio</th><th style="padding:7px 12px;text-align:right;color:var(--g);font-family:var(--fd);letter-spacing:1px">Valore</th></tr></thead><tbody>${seq.map((p,idx)=>`<tr style="border-top:1px solid #1a1a1a${idx<3?';background:rgba(178,34,34,.04)':''}"><td style="padding:7px 12px;font-family:var(--fd);font-size:11px;color:${idx<3?'var(--red)':'var(--g)'};font-weight:${idx<3?'700':'400'}">${idx+1}</td><td style="padding:7px 12px">${p.emoji||'🎁'}</td><td style="padding:7px 12px;font-weight:${idx<3?'700':'400'}">${p.name}</td><td style="padding:7px 12px;text-align:right;font-family:var(--fd);font-size:11px;color:var(--g)">€${parseFloat(p.value||0).toFixed(2)}</td></tr>`).join('')}</tbody></table></div></div>`).join('');}
-function downloadCSV(dayIdx){const seq=regSequences[dayIdx];if(!seq.length)return;const name=document.getElementById('rg-event').value||'FITNESS_EXPO';const date=regDays[dayIdx].date||`giorno${dayIdx+1}`;const seed=makeSeed(dayIdx,name);let csv=`PIANO DISTRIBUZIONE PREMI — GIORNO ${dayIdx+1} (${date})\nSeed algoritmo: ${seed}\n\nPosizione,Premio,Valore Euro,Emoji\n`;csv+=seq.map((p,i)=>`${i+1},"${p.name}",${parseFloat(p.value||0).toFixed(2)},"${p.emoji||'🎁'}"`).join('\n');dlFile(csv,`piano_premi_giorno${dayIdx+1}_${date}.csv`,'text/csv');}
+
+// Debounced auto-save
+function schedSave(){
+  clearTimeout(saveTimer);
+  saveTimer=setTimeout(()=>saveRegulationConfig(),1500);
+}
+
+async function saveRegulationConfig(){
+  try{
+    const payload={
+      company:{name:document.getElementById('rg-name')?.value||'',vat:document.getElementById('rg-vat')?.value||'',addr:document.getElementById('rg-addr')?.value||'',city:document.getElementById('rg-city')?.value||'',email:document.getElementById('rg-email')?.value||''},
+      event:{name:document.getElementById('rg-event')?.value||'',venue:document.getElementById('rg-venue')?.value||''},
+      regDays,regSequences,regLocked,admPrizes
+    };
+    await window.DB.saveConfig('regulation',payload);
+    buildRegulationModalText();
+  }catch(e){console.error('saveRegulationConfig error',e);}
+}
+
+async function loadRegulationConfig(){
+  const data=await window.DB.getConfig('regulation');
+  if(!data)return;
+  if(data.company){
+    document.getElementById('rg-name').value=data.company.name||'';
+    document.getElementById('rg-vat').value=data.company.vat||'';
+    document.getElementById('rg-addr').value=data.company.addr||'';
+    document.getElementById('rg-city').value=data.company.city||'';
+    document.getElementById('rg-email').value=data.company.email||'';
+  }
+  if(data.event){
+    document.getElementById('rg-event').value=data.event.name||'';
+    document.getElementById('rg-venue').value=data.event.venue||'';
+  }
+  if(data.regDays&&data.regDays.length>0) regDays=data.regDays;
+  if(data.regSequences) regSequences=data.regSequences;
+  if(data.regLocked) regLocked=data.regLocked;
+  if(data.admPrizes) admPrizes=data.admPrizes;
+  renderRegDays();
+  if(regDays.some(d=>(d.dist||[]).length>0)) document.getElementById('reg-seq-section').classList.remove('hidden');
+  if(regSequences.some(s=>s&&s.length>0)){
+    renderRegOutput();
+    document.getElementById('reg-output').classList.remove('hidden');
+  }
+  buildRegulationModalText();
+}
+
+async function loadRegDays(){
+  const prizes=await window.DB.getPrizes();
+  if(!prizes.length){document.getElementById('reg-days').innerHTML='<div style="color:#ff6b6b;font-size:13px">Nessun premio. Salva prima i premi.</div>';return;}
+  // Auto-distribute equally, preserving existing dates
+  regDays=regDays.map((d,dayIdx)=>({
+    ...d,
+    dist:prizes.map(p=>{
+      const base=Math.floor(p.qty/4);
+      const extra=dayIdx<(p.qty%4)?1:0;
+      return{id:p.id,name:p.name,emoji:p.emoji||'🎁',value:p.value||0,totalQty:p.qty,dayQty:base+extra};
+    })
+  }));
+  renderRegDays();
+  document.getElementById('reg-seq-section').classList.remove('hidden');
+}
+
+function renderRegDays(){
+  document.getElementById('reg-days').innerHTML=regDays.map((d,i)=>`
+    <div style="background:var(--s2);border:1px solid var(--b);padding:16px;margin-bottom:12px;border-left:3px solid var(--red)">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">
+        <div style="font-family:var(--fd);font-size:16px;font-weight:700;letter-spacing:2px;flex-shrink:0">GIORNO ${i+1}</div>
+        <input type="date" value="${d.date||''}" onchange="regDays[${i}].date=this.value;schedSave()"
+          style="padding:8px 12px;background:#0a0a0a;border:1px solid var(--b);color:var(--w);font-family:var(--fb);font-size:13px;flex:1;min-width:0"/>
+      </div>
+      <div style="font-family:var(--fd);font-size:10px;letter-spacing:2px;color:var(--g);margin-bottom:10px;text-transform:uppercase">Quantità per premio in questo giorno</div>
+      ${(d.dist||[]).map((p,pi)=>`
+        <div style="display:grid;grid-template-columns:1fr auto 80px auto;align-items:center;gap:10px;margin-bottom:8px">
+          <div style="display:flex;align-items:center;gap:8px;min-width:0">
+            <span style="font-size:16px;flex-shrink:0">${p.emoji}</span>
+            <span style="font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${p.name}</span>
+          </div>
+          <span style="font-size:11px;color:var(--g);white-space:nowrap">tot.${p.totalQty}</span>
+          <input type="number" min="0" max="${p.totalQty}" value="${parseInt(p.dayQty)||0}"
+            style="padding:7px 10px;background:#0a0a0a;border:1px solid var(--b);color:var(--w);font-family:var(--fb);font-size:13px;text-align:center;width:100%"
+            oninput="regDays[${i}].dist[${pi}].dayQty=parseInt(this.value)||0;updateRegDayTotals(${i});schedSave()"/>
+          <span style="font-size:11px;color:var(--g);white-space:nowrap" id="reg-rem-${i}-${pi}"></span>
+        </div>`).join('')}
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-top:10px;padding-top:10px;border-top:1px solid var(--b)">
+        <span style="font-size:12px;color:var(--g)">Premi questo giorno:</span>
+        <span style="font-family:var(--fd);font-size:16px;font-weight:700" id="reg-day-tot-${i}">0</span>
+      </div>
+      <div id="reg-day-err-${i}" style="font-size:12px;color:#ff6b6b;margin-top:6px;min-height:16px"></div>
+    </div>`).join('');
+  regDays.forEach((_,i)=>updateRegDayTotals(i));
+  updateRegGrandValidation();
+}
+
+function updateRegDayTotals(dayIdx){
+  const tot=(regDays[dayIdx].dist||[]).reduce((s,p)=>s+(parseInt(p.dayQty)||0),0);
+  const el=document.getElementById(`reg-day-tot-${dayIdx}`);
+  if(el)el.textContent=tot;
+  updateRegGrandValidation();
+}
+
+function updateRegGrandValidation(){
+  if(!admPrizes.length)return;
+  admPrizes.forEach((p,pi)=>{
+    const assigned=regDays.reduce((s,d)=>s+(parseInt((d.dist||[])[pi]?.dayQty)||0),0);
+    const remaining=p.qty-assigned;
+    regDays.forEach((_,di)=>{const el=document.getElementById(`reg-rem-${di}-${pi}`);if(el)el.textContent=`rim.${remaining}`;});
+    regDays.forEach((d,di)=>{
+      const errEl=document.getElementById(`reg-day-err-${di}`);
+      if(errEl) errEl.textContent=remaining<0?`⚠ "${p.name}": ${-remaining} in eccesso`:'';
+    });
+  });
+  const hasErrors=admPrizes.some((p,pi)=>regDays.reduce((s,d)=>s+(parseInt((d.dist||[])[pi]?.dayQty)||0),0)>p.qty);
+  const secBtn=document.querySelector('#reg-seq-section .adbb');
+  if(secBtn){secBtn.style.opacity=hasErrors?'.4':'1';secBtn.style.pointerEvents=hasErrors?'none':'auto';}
+}
+
+async function generateRegulation(){
+  let err=false;
+  admPrizes.forEach((p,pi)=>{if(regDays.reduce((s,d)=>s+(parseInt((d.dist||[])[pi]?.dayQty)||0),0)>p.qty)err=true;});
+  if(err){alert('Errore: hai distribuito più premi del totale. Correggi prima.');return;}
+  const name=document.getElementById('rg-event').value||'FITNESS EXPO 2026';
+  regSequences=regDays.map((d,i)=>{
+    const exp=[];
+    (d.dist||[]).forEach(p=>{for(let j=0;j<(parseInt(p.dayQty)||0);j++)exp.push({name:p.name,emoji:p.emoji||'🎁',value:p.value||0});});
+    return seededShuffle(exp,makeSeed(i,name));
+  });
+  regLocked=true;
+  renderRegOutput();
+  document.getElementById('reg-output').classList.remove('hidden');
+  document.getElementById('reg-msg').textContent='✓ Sequenze generate e salvate';
+  setTimeout(()=>document.getElementById('reg-msg').textContent='',3000);
+  buildRegulationModalText();
+  await saveRegulationConfig();
+}
+
+function renderRegOutput(){
+  const name=document.getElementById('rg-event').value||'FITNESS EXPO 2026';
+  document.getElementById('reg-day-previews').innerHTML=regSequences.map((seq,i)=>`
+    <div style="margin-bottom:16px">
+      <div style="display:flex;align-items:center;justify-content:space-between;background:var(--b);padding:10px 14px">
+        <div style="font-family:var(--fd);font-size:14px;font-weight:700;letter-spacing:2px">GIORNO ${i+1} — ${regDays[i].date||'—'}</div>
+        <div style="display:flex;align-items:center;gap:10px">
+          <span style="font-family:var(--fd);font-size:11px;color:var(--g)">Seed:${makeSeed(i,name)} · ${seq.length}premi</span>
+          <button onclick="downloadCSV(${i})" style="padding:5px 12px;background:var(--red);color:white;border:none;font-family:var(--fd);font-size:11px;letter-spacing:1px;cursor:pointer">⬇ CSV</button>
+        </div>
+      </div>
+      <div style="max-height:260px;overflow-y:auto;border:1px solid var(--b);border-top:none">
+        <table style="width:100%;border-collapse:collapse;font-size:12px">
+          <thead><tr style="background:#0d0d0d">
+            <th style="padding:7px 12px;text-align:left;color:var(--g);font-family:var(--fd);letter-spacing:1px;width:50px">#</th>
+            <th style="padding:7px 12px;width:30px"></th>
+            <th style="padding:7px 12px;text-align:left;color:var(--g);font-family:var(--fd);letter-spacing:1px">Premio</th>
+            <th style="padding:7px 12px;text-align:right;color:var(--g);font-family:var(--fd);letter-spacing:1px">Valore</th>
+          </tr></thead>
+          <tbody>${seq.map((p,idx)=>`
+            <tr style="border-top:1px solid #1a1a1a${idx<3?';background:rgba(178,34,34,.04)':''}">
+              <td style="padding:7px 12px;font-family:var(--fd);font-size:11px;color:${idx<3?'var(--red)':'var(--g)'};font-weight:${idx<3?'700':'400'}">${idx+1}</td>
+              <td style="padding:7px 12px">${p.emoji||'🎁'}</td>
+              <td style="padding:7px 12px;font-weight:${idx<3?'700':'400'}">${p.name}</td>
+              <td style="padding:7px 12px;text-align:right;font-family:var(--fd);font-size:11px;color:var(--g)">€${parseFloat(p.value||0).toFixed(2)}</td>
+            </tr>`).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>`).join('');
+}
+
+function downloadCSV(dayIdx){
+  const seq=regSequences[dayIdx];if(!seq.length)return;
+  const name=document.getElementById('rg-event').value||'FITNESS_EXPO';
+  const date=regDays[dayIdx].date||`giorno${dayIdx+1}`;
+  let csv=`PIANO DISTRIBUZIONE PREMI — GIORNO ${dayIdx+1} (${date})\nSeed: ${makeSeed(dayIdx,name)}\n\nPosizione,Premio,Valore Euro,Emoji\n`;
+  csv+=seq.map((p,i)=>`${i+1},"${p.name}",${parseFloat(p.value||0).toFixed(2)},"${p.emoji||'🎁'}"`).join('\n');
+  dlFile(csv,`piano_premi_giorno${dayIdx+1}_${date}.csv`,'text/csv');
+}
 function downloadAllCSV(){regSequences.forEach((_,i)=>downloadCSV(i));}
-function downloadRegulationHTML(){const co={name:document.getElementById('rg-name').value,vat:document.getElementById('rg-vat').value,addr:document.getElementById('rg-addr').value,city:document.getElementById('rg-city').value,email:document.getElementById('rg-email').value};const ev={name:document.getElementById('rg-event').value,venue:document.getElementById('rg-venue').value};const today=new Date().toLocaleDateString('it-IT');const totalPrizes=regDays.reduce((s,d)=>s+(d.dist||[]).reduce((ps,p)=>ps+(parseInt(p.dayQty)||0),0),0);const totalValue=regDays.reduce((s,d)=>s+(d.dist||[]).reduce((ps,p)=>ps+(parseFloat(p.value)||0)*(parseInt(p.dayQty)||0),0),0);const evName=ev.name||'EVORA — Gratta & Vinci';const html=`<!DOCTYPE html><html lang="it"><head><meta charset="UTF-8"><title>Regolamento — ${evName}</title><style>body{font-family:Georgia,serif;max-width:800px;margin:40px auto;padding:0 32px;color:#1a1a1a;line-height:1.8;font-size:14px}h1{font-size:22px;text-align:center;margin-bottom:6px;text-transform:uppercase;letter-spacing:1px}h2{font-size:15px;margin:24px 0 8px;border-bottom:1px solid #ccc;padding-bottom:4px;text-transform:uppercase;letter-spacing:.5px}p{margin-bottom:10px}table{width:100%;border-collapse:collapse;margin:12px 0;font-size:13px;page-break-inside:avoid}th{background:#f0f0f0;padding:7px 10px;text-align:left;border:1px solid #ccc;font-weight:bold}td{padding:6px 10px;border:1px solid #ddd}tr:nth-child(even) td{background:#fafafa}.hdr{text-align:center;border:2px solid #1a1a1a;padding:20px;margin-bottom:32px}.pb{page-break-before:always}.sm{font-size:11px;color:#666}.ft{margin-top:48px;text-align:center;font-size:11px;color:#888;border-top:1px solid #eee;padding-top:16px}@media print{body{margin:20mm}}</style></head><body><div class="hdr"><h1>REGOLAMENTO CONCORSO A PREMI</h1><p style="font-weight:bold;font-size:16px">${evName.toUpperCase()}</p><p class="sm">ai sensi del D.P.R. 26 novembre 2001, n. 430 — Redatto il ${today}</p></div><h2>Art. 1 — Soggetto Promotore</h2><p><strong>${co.name||'[RAGIONE SOCIALE]'}</strong>, sede legale: ${co.addr||'[INDIRIZZO]'}, P.IVA ${co.vat||'[PIVA]'}, email: ${co.email||'[EMAIL]'}. </p><h2>Art. 2 — Oggetto e Finalità</h2><p>Operazione a premi denominata <strong>"${evName}"</strong> con finalità promozionali in occasione di <strong>${ev.venue||'[FIERA]'}</strong>.</p><h2>Art. 3 — Modalità di Partecipazione</h2><p>Possono partecipare le persone fisiche maggiorenni che: (1) compilano il modulo di registrazione digitale; (2) prestano consenso al trattamento dati per finalità di marketing; (3) partecipano al gioco digitale "Gratta &amp; Vinci". Ogni persona può partecipare <strong>una sola volta</strong>.</p><h2>Art. 4 — Periodo e Luogo di Svolgimento</h2><table><tr><th>Giorno</th><th>Data</th><th>Luogo</th><th>N. Premi</th></tr>${regDays.map((d,i)=>`<tr><td>Giorno ${i+1}</td><td>${d.date||'—'}</td><td>${ev.venue||'Stand Promotore'}</td><td>${(d.dist||[]).reduce((s,p)=>s+(parseInt(p.dayQty)||0),0)}</td></tr>`).join('')}</table><h2>Art. 5 — Premi in Palio</h2><table><tr><th>Giorno</th><th>Premio</th><th>Qtà</th><th>Valore unitario</th><th>Valore totale</th></tr>${regDays.map((d,i)=>(d.dist||[]).filter(p=>p.name).map(p=>`<tr><td>Giorno ${i+1} — ${d.date||''}</td><td>${p.emoji||''} ${p.name}</td><td>${p.dayQty||0}</td><td>€${parseFloat(p.value||0).toFixed(2)}</td><td>€${(parseFloat(p.value||0)*(parseInt(p.dayQty)||0)).toFixed(2)}</td></tr>`).join('')).join('')}<tr><td colspan="2"><strong>TOTALE</strong></td><td><strong>${totalPrizes}</strong></td><td>—</td><td><strong>€${totalValue.toFixed(2)}</strong></td></tr></table><p class="sm">I premi non sono convertibili in denaro contante e non sono cedibili a terzi.</p><h2>Art. 6 — Meccanismo di Assegnazione</h2><p>L'assegnazione avviene tramite <strong>sequenza predeterminata</strong> generata con algoritmo Fisher-Yates con seed deterministico fisso prima dell'inizio dell'evento. Il primo partecipante riceve il premio in posizione 1, il secondo in posizione 2, e così via.</p>${regDays.map((d,i)=>`<p>Giorno ${i+1} (${d.date||'—'}) — Seed algoritmo: <strong>${makeSeed(i,evName)}</strong></p>`).join('')}<h2>Art. 7 — Consegna dei Premi</h2><p>I premi vengono consegnati immediatamente durante l'evento presso lo stand del Promotore. Il partecipante riceve un codice univoco e QR code verificato dallo staff. Ogni premio può essere consegnato una sola volta.</p><h2>Art. 8 — Trattamento dei Dati Personali</h2><p>Titolare del trattamento: ${co.name||'[RAGIONE SOCIALE]'}. Dati utilizzati per gestione concorso e marketing (previo consenso esplicito). Non ceduti a terzi. Diritti GDPR: ${co.email||'[EMAIL PRIVACY]'}. </p><h2>Art. 9 — Esclusioni e Responsabilità</h2><p>Sono esclusi i partecipanti con dati falsi o che abbiano tentato di manipolare il sistema. Il Promotore non risponde per cause di forza maggiore.</p><h2>Art. 10 — Foro Competente</h2><p>Foro esclusivamente competente: ${co.city||'[CITTÀ]'}. Normativa applicabile: D.P.R. 430/2001.</p>${regSequences.map((seq,i)=>seq.length>0?`<div class="pb"><h2>ALLEGATO ${i+1} — PIANO DI DISTRIBUZIONE GIORNO ${i+1}: ${regDays[i].date||'—'}</h2><p class="sm">Seed: ${makeSeed(i,evName)} | Generato: ${today} | Totale: ${seq.length} premi</p><table><tr><th style="width:60px">#</th><th>Premio</th><th style="width:120px">Valore €</th></tr>${seq.map((p,idx)=>`<tr><td>${idx+1}</td><td>${p.emoji||''} ${p.name}</td><td>€${parseFloat(p.value||0).toFixed(2)}</td></tr>`).join('')}</table></div>`:'').join('')}<div class="ft">— Fine del Regolamento — Generato il ${today} —</div></body></html>`;dlFile(html,`regolamento_${evName.replace(/\s+/g,'_')}_${today.replace(/\//g,'-')}.html`,'text/html');}
-function dlFile(content,filename,type){const b=new Blob([content],{type:type+';charset=utf-8;'});const u=URL.createObjectURL(b);const a=document.createElement('a');a.href=u;a.download=filename;a.click();URL.revokeObjectURL(u);}
-async function loadStats(){const el=document.getElementById('adstats');try{const all=await window.DB.getAllAssignments(),prizes=await window.DB.getPrizes();const del=all.filter(a=>a.status==='delivered').length;const rem=prizes.reduce((s,p)=>s+Math.max(0,p.qty-p.assigned),0);el.innerHTML=`<div class="dstat" style="margin-bottom:0"><div class="dsc"><div class="dsn">${all.length}</div><div class="dsl">Giocatori</div></div><div class="dsc"><div class="dsn" style="color:var(--red)">${all.length-del}</div><div class="dsl">Da consegnare</div></div><div class="dsc"><div class="dsn">${del}</div><div class="dsl">Consegnati</div></div><div class="dsc"><div class="dsn">${rem}</div><div class="dsl">Premi rimasti</div></div></div>`;}catch(e){el.innerHTML='<div style="color:#ff6b6b;font-size:13px">Errore</div>';}}
-let resetStep=0;
-function confirmReset(){const msg=document.getElementById('reset-msg');const btn=document.querySelector('[onclick="confirmReset()"]');if(resetStep===0){resetStep=1;btn.textContent='⚠ SICURO? CLICCA DI NUOVO PER CONFERMARE';btn.style.background='#cc2222';msg.textContent='Clicca di nuovo per confermare il reset. Questa azione è irreversibile.';msg.style.color='#ff6b6b';setTimeout(()=>{resetStep=0;btn.textContent='🗑 RESET COMPLETO DATI';btn.style.background='#8b1a1a';msg.textContent='';},5000);} else {resetStep=0;btn.textContent='🗑 RESET COMPLETO DATI';btn.style.background='#8b1a1a';msg.textContent='Reset in corso…';msg.style.color='#aaa';window.DB.resetAll().then(async()=>{msg.textContent='✓ Reset completato. Tutti i dati di gioco sono stati cancellati.';msg.style.color='#4ecdc4';setTimeout(()=>msg.textContent='',4000);await loadStats();}).catch(()=>{msg.textContent='❌ Errore durante il reset.';msg.style.color='#ff6b6b';});}}
+
+function downloadRegulationHTML(){
+  const co={name:document.getElementById('rg-name').value,vat:document.getElementById('rg-vat').value,addr:document.getElementById('rg-addr').value,city:document.getElementById('rg-city').value,email:document.getElementById('rg-email').value};
+  const ev={name:document.getElementById('rg-event').value,venue:document.getElementById('rg-venue').value};
+  const today=new Date().toLocaleDateString('it-IT');
+  const evName=ev.name||'EVORA — Gratta & Vinci';
+  const totalPrizes=regDays.reduce((s,d)=>s+(d.dist||[]).reduce((ps,p)=>ps+(parseInt(p.dayQty)||0),0),0);
+  const totalValue=regDays.reduce((s,d)=>s+(d.dist||[]).reduce((ps,p)=>ps+(parseFloat(p.value)||0)*(parseInt(p.dayQty)||0),0),0);
+  const html=`<!DOCTYPE html><html lang="it"><head><meta charset="UTF-8"><title>Regolamento — ${evName}</title>
+<style>body{font-family:Georgia,serif;max-width:800px;margin:40px auto;padding:0 32px;color:#1a1a1a;line-height:1.8;font-size:14px}h1{font-size:22px;text-align:center;margin-bottom:6px;text-transform:uppercase;letter-spacing:1px}h2{font-size:15px;margin:24px 0 8px;border-bottom:1px solid #ccc;padding-bottom:4px;text-transform:uppercase;letter-spacing:.5px}p{margin-bottom:10px}table{width:100%;border-collapse:collapse;margin:12px 0;font-size:13px;page-break-inside:avoid}th{background:#f0f0f0;padding:7px 10px;text-align:left;border:1px solid #ccc;font-weight:bold}td{padding:6px 10px;border:1px solid #ddd}tr:nth-child(even) td{background:#fafafa}.hdr{text-align:center;border:2px solid #1a1a1a;padding:20px;margin-bottom:32px}.pb{page-break-before:always}.sm{font-size:11px;color:#666}.ft{margin-top:48px;text-align:center;font-size:11px;color:#888;border-top:1px solid #eee;padding-top:16px}@media print{body{margin:20mm}}</style>
+</head><body>
+<div class="hdr"><h1>REGOLAMENTO CONCORSO A PREMI</h1><p style="font-weight:bold;font-size:16px">${evName.toUpperCase()}</p><p class="sm">ai sensi del D.P.R. 26 novembre 2001, n. 430 — Redatto il ${today}</p></div>
+<h2>Art. 1 — Soggetto Promotore</h2><p><strong>${co.name||'[RAGIONE SOCIALE]'}</strong>, sede: ${co.addr||'[INDIRIZZO]'}, P.IVA ${co.vat||'[PIVA]'}, email: ${co.email||'[EMAIL]'}.</p>
+<h2>Art. 2 — Oggetto</h2><p>Operazione a premi <strong>"${evName}"</strong> in occasione di <strong>${ev.venue||'[FIERA]'}</strong>.</p>
+<h2>Art. 3 — Partecipazione</h2><p>Persone fisiche maggiorenni che compilano il modulo di registrazione e partecipano al gioco digitale. <strong>Una sola partecipazione per persona.</strong></p>
+<h2>Art. 4 — Periodo</h2><table><tr><th>Giorno</th><th>Data</th><th>Luogo</th><th>N. Premi</th></tr>${regDays.map((d,i)=>`<tr><td>Giorno ${i+1}</td><td>${d.date||'—'}</td><td>${ev.venue||'Stand Promotore'}</td><td>${(d.dist||[]).reduce((s,p)=>s+(parseInt(p.dayQty)||0),0)}</td></tr>`).join('')}</table>
+<h2>Art. 5 — Premi</h2><table><tr><th>Giorno</th><th>Premio</th><th>Qtà</th><th>Valore unitario</th><th>Valore totale</th></tr>${regDays.map((d,i)=>(d.dist||[]).filter(p=>p.name).map(p=>`<tr><td>Giorno ${i+1} — ${d.date||''}</td><td>${p.emoji||''} ${p.name}</td><td>${p.dayQty||0}</td><td>€${parseFloat(p.value||0).toFixed(2)}</td><td>€${(parseFloat(p.value||0)*(parseInt(p.dayQty)||0)).toFixed(2)}</td></tr>`).join('')).join('')}<tr><td colspan="2"><strong>TOTALE</strong></td><td><strong>${totalPrizes}</strong></td><td>—</td><td><strong>€${totalValue.toFixed(2)}</strong></td></tr></table>
+<h2>Art. 6 — Meccanismo</h2><p>Sequenza predeterminata con algoritmo Fisher-Yates seed deterministico. Il primo partecipante riceve il premio in posizione 1, il secondo in posizione 2, ecc.</p>${regDays.map((d,i)=>`<p>Giorno ${i+1} (${d.date||'—'}) — Seed: <strong>${makeSeed(i,evName)}</strong></p>`).join('')}
+<h2>Art. 7 — Consegna</h2><p>Premio consegnato immediatamente allo stand previa verifica codice univoco.</p>
+<h2>Art. 8 — Privacy</h2><p>Titolare: ${co.name||'[RAGIONE SOCIALE]'}. GDPR UE 2016/679. Contatto: ${co.email||'[EMAIL]'}.</p>
+<h2>Art. 9 — Foro Competente</h2><p>Foro: ${co.city||'[CITTÀ]'}. Normativa: D.P.R. 430/2001.</p>
+${regSequences.map((seq,i)=>seq&&seq.length>0?`<div class="pb"><h2>ALLEGATO ${i+1} — GIORNO ${i+1}: ${regDays[i].date||'—'}</h2><p class="sm">Seed: ${makeSeed(i,evName)} | ${today} | ${seq.length} premi</p><table><tr><th style="width:60px">#</th><th>Premio</th><th style="width:120px">Valore €</th></tr>${seq.map((p,idx)=>`<tr><td>${idx+1}</td><td>${p.emoji||''} ${p.name}</td><td>€${parseFloat(p.value||0).toFixed(2)}</td></tr>`).join('')}</table></div>`:'').join('')}
+<div class="ft">— Fine del Regolamento — ${today} —</div></body></html>`;
+  dlFile(html,`regolamento_${evName.replace(/\s+/g,'_')}_${today.replace(/\//g,'-')}.html`,'text/html');
+}
+
+function dlFile(content,filename,type){
+  const b=new Blob([content],{type:type+';charset=utf-8;'});
+  const u=URL.createObjectURL(b);
+  const a=document.createElement('a');a.href=u;a.download=filename;a.click();
+  URL.revokeObjectURL(u);
+}
+
+async function loadStats(){
+  const el=document.getElementById('adstats');
+  try{
+    const all=await window.DB.getAllAssignments(),prizes=await window.DB.getPrizes();
+    const del=all.filter(a=>a.status==='delivered').length;
+    const rem=prizes.reduce((s,p)=>s+Math.max(0,p.qty-p.assigned),0);
+    el.innerHTML=`<div class="dstat" style="margin-bottom:0">
+      <div class="dsc"><div class="dsn">${all.length}</div><div class="dsl">Giocatori</div></div>
+      <div class="dsc"><div class="dsn" style="color:var(--red)">${all.length-del}</div><div class="dsl">Da consegnare</div></div>
+      <div class="dsc"><div class="dsn">${del}</div><div class="dsl">Consegnati</div></div>
+      <div class="dsc"><div class="dsn">${rem}</div><div class="dsl">Premi rimasti</div></div>
+    </div>`;
+  }catch(e){el.innerHTML='<div style="color:#ff6b6b;font-size:13px">Errore</div>';}
+}
 </script>
 </body>
 </html>
