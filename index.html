@@ -49,7 +49,16 @@
     async function getConfig(key){const s=await getDoc(doc(db,"config",key));return s.exists()?s.data().value:null;}
     async function saveConfig(key,val){await setDoc(doc(db,"config",key),{value:val});}
 
-    window.DB={initPrizes,assignPrize,markDelivered,getAllAssignments,findByCode,getPrizes,savePrizes,listenAssignment,getConfig,saveConfig};
+    async function resetAll(){
+      // Delete all assignments
+      const asnSnap=await getDocs(collection(db,"assignments"));
+      for(const d of asnSnap.docs) await d.ref.delete();
+      // Reset assigned counters on all prizes
+      const prSnap=await getDocs(collection(db,"prizes"));
+      for(const d of prSnap.docs) await updateDoc(d.ref,{assigned:0});
+    }
+
+    window.DB={initPrizes,assignPrize,markDelivered,getAllAssignments,findByCode,getPrizes,savePrizes,listenAssignment,getConfig,saveConfig,resetAll};
     await initPrizes();
     window.dispatchEvent(new Event("db-ready"));
   </script>
@@ -444,6 +453,17 @@
       <div class="abr"><button class="adbb o" onclick="loadStats()">↺ Aggiorna</button></div>
     </div>
 
+    <!-- RESTART -->
+    <div class="ads" style="border-color:#3a1a1a">
+      <div class="adst" style="color:#ff6b6b">⚠ RESET COMPLETO</div>
+      <div class="adss">Cancella tutte le partite, i codici assegnati e azzera i contatori. I premi configurati restano. Usa solo prima di una nuova sessione di test o a inizio fiera.</div>
+      <div style="padding:14px;background:rgba(255,107,107,.06);border:1px solid rgba(255,107,107,.2);font-size:13px;color:#aaa;margin-bottom:16px;line-height:1.7">
+        ❌ Questa operazione è <strong style="color:var(--w)">irreversibile</strong>. Tutti i giocatori, premi assegnati e codici verranno eliminati dal database.
+      </div>
+      <button class="adbb" style="background:#8b1a1a;width:100%" onclick="confirmReset()">🗑 RESET COMPLETO DATI</button>
+      <div class="adsv" id="reset-msg"></div>
+    </div>
+
     <!-- REGULATION SECTION -->
     <div class="ads">
       <div class="adst">REGOLAMENTO</div>
@@ -591,27 +611,42 @@ function buildRegulationModalText(){
   const co={name:document.getElementById('rg-name')?.value||'',city:document.getElementById('rg-city')?.value||''};
   const ev={name:document.getElementById('rg-event')?.value||'Concorso a premi',venue:document.getElementById('rg-venue')?.value||''};
   const today=new Date().toLocaleDateString('it-IT');
+
+  const seqHtml=regSequences.map((seq,i)=>seq.length>0?`
+    <h3>Sequenza Giorno ${i+1} — ${regDays[i].date||'—'} (${seq.length} premi)</h3>
+    <div style="background:#0a0a0a;border:1px solid #2a2a2a;max-height:200px;overflow-y:auto;margin-bottom:8px">
+      <table style="width:100%;border-collapse:collapse;font-size:12px">
+        ${seq.map((p,idx)=>`<tr style="border-bottom:1px solid #1a1a1a">
+          <td style="padding:5px 10px;color:#555;font-family:var(--fd);width:36px">${idx+1}</td>
+          <td style="padding:5px 6px">${p.emoji||'🎁'}</td>
+          <td style="padding:5px 10px;color:#ccc">${p.name}</td>
+          <td style="padding:5px 10px;color:#555;text-align:right">€${parseFloat(p.value||0).toFixed(2)}</td>
+        </tr>`).join('')}
+      </table>
+    </div>`:'').join('');
+
   document.getElementById('reg-modal-title').textContent='REGOLAMENTO';
   document.getElementById('reg-modal-content').innerHTML=`
     <h3>Art. 1 — Soggetto Promotore</h3>
-    <p><strong>${co.name||'Evora'}</strong> organizza il presente concorso a premi.</p>
+    <p><strong>${co.name||'Evora'}</strong> organizza il presente concorso a premi ai sensi del D.P.R. 430/2001.</p>
     <h3>Art. 2 — Oggetto</h3>
     <p>Operazione a premi denominata <strong>"${ev.name}"</strong> in occasione di ${ev.venue||'evento fieristico'}.</p>
     <h3>Art. 3 — Partecipazione</h3>
     <p>Possono partecipare le persone fisiche maggiorenni che compilano il modulo di registrazione e partecipano al gioco digitale. <strong>Ogni persona può partecipare una sola volta.</strong></p>
     <h3>Art. 4 — Periodo</h3>
-    <p>L'operazione si svolge nei giorni ${regDays.map((d,i)=>d.date?`${i+1}° (${d.date})`:'').filter(Boolean).join(', ')||'indicati nello stand'}.</p>
-    <h3>Art. 5 — Premi</h3>
-    <p>I premi disponibili sono: ${admPrizes.map(p=>`${p.emoji||''} <strong>${p.name}</strong> (n. ${p.qty})`).join(', ')}. I premi non sono convertibili in denaro.</p>
+    <p>L'operazione si svolge nei giorni: ${regDays.map((d,i)=>d.date?`<strong>${d.date}</strong>`:'').filter(Boolean).join(', ')||'indicati nello stand'}.</p>
+    <h3>Art. 5 — Premi Disponibili</h3>
+    <p>${admPrizes.map(p=>`${p.emoji||''} <strong>${p.name}</strong> × ${p.qty} (€${parseFloat(p.value||0).toFixed(2)} cad.)`).join(' &nbsp;·&nbsp; ')||'Vedi stand Evora'}. I premi non sono convertibili in denaro.</p>
     <h3>Art. 6 — Meccanismo di Assegnazione</h3>
-    <p>I premi sono assegnati tramite <strong>sequenza predeterminata</strong> generata prima dell'evento con algoritmo deterministico. Il meccanismo non è basato su casualità in tempo reale.</p>
-    <h3>Art. 7 — Consegna</h3>
-    <p>I premi vengono consegnati immediatamente presso lo stand, previa verifica del codice univoco assegnato al partecipante.</p>
-    <h3>Art. 8 — Privacy</h3>
-    <p>I dati personali sono trattati ai sensi del GDPR UE 2016/679 per la gestione del concorso e, previo consenso, per finalità di marketing.</p>
-    <h3>Art. 9 — Foro Competente</h3>
-    <p>Foro competente: ${co.city||'indicato nel regolamento completo'}. Normativa: D.P.R. 430/2001.</p>
-    <p style="margin-top:16px;font-size:11px;color:#555">Regolamento generato il ${today}. Il documento completo con allegati tecnici è disponibile nell'area Admin.</p>`;
+    <p>I premi sono assegnati tramite <strong>sequenza predeterminata</strong> generata prima dell'evento con algoritmo Fisher-Yates deterministico. L'assegnazione segue l'ordine di partecipazione giornaliero.</p>
+    ${regSequences.some(s=>s.length>0)?`<h3>Art. 7 — Sequenze di Distribuzione</h3><p>Le sequenze complete dei premi per ogni giornata sono riportate di seguito:</p>${seqHtml}`:''}
+    <h3>${regSequences.some(s=>s.length>0)?'Art. 8':'Art. 7'} — Consegna</h3>
+    <p>I premi vengono consegnati immediatamente presso lo stand, previa verifica del codice univoco assegnato.</p>
+    <h3>${regSequences.some(s=>s.length>0)?'Art. 9':'Art. 8'} — Privacy</h3>
+    <p>I dati personali sono trattati ai sensi del GDPR UE 2016/679 per gestione del concorso e, previo consenso, per marketing.</p>
+    <h3>${regSequences.some(s=>s.length>0)?'Art. 10':'Art. 9'} — Foro Competente</h3>
+    <p>Foro competente: <strong>${co.city||'indicato nel regolamento completo'}</strong>. Normativa: D.P.R. 430/2001.</p>
+    <p style="margin-top:16px;font-size:11px;color:#555">Generato il ${today}. Il documento completo con allegati è disponibile nell'area Admin.</p>`;
 }
 
 // Pre-populate modal with basic text before regulation is generated
@@ -910,8 +945,11 @@ async function savePwds(){
     setTimeout(()=>msg.textContent='',3000);
   }catch(e){msg.textContent='❌ Errore salvataggio';}
 }
-// ── REGULATION ────────────────────────────────────────────────────────────
-let regDays=[{date:'',dist:[]},{date:'',dist:[]},{date:'',dist:[]},{date:'',dist:[]}];
+// Default dates for the 4 fair days
+const DEFAULT_DATES=['2026-05-28','2026-05-29','2026-05-30','2026-05-31'];
+
+// Init regDays with default dates on startup
+let regDays=DEFAULT_DATES.map(date=>({date,dist:[]}));
 let regSequences=[[],[],[],[]];
 let regLocked=false;
 
@@ -922,11 +960,18 @@ function makeSeed(dayIdx,name){let h=0;const s=`${name}_day${dayIdx}_2026`;for(l
 async function loadRegDays(){
   const prizes=await window.DB.getPrizes();
   if(!prizes.length){document.getElementById('reg-days').innerHTML='<div style="color:#ff6b6b;font-size:13px">Nessun premio configurato. Salva prima i premi nella sezione Premi.</div>';return;}
-  // Init distribution: all zeros per day if not set
-  regDays=regDays.map(d=>({
+
+  // Auto-distribute prizes equally across 4 days
+  // Remainder goes to earlier days
+  regDays=regDays.map((d,dayIdx)=>({
     ...d,
-    dist:prizes.map(p=>({id:p.id,name:p.name,emoji:p.emoji||'🎁',value:p.value||0,totalQty:p.qty,dayQty:0}))
+    dist:prizes.map(p=>{
+      const base=Math.floor(p.qty/4);
+      const extra=dayIdx<(p.qty%4)?1:0; // distribute remainder to first N days
+      return{id:p.id,name:p.name,emoji:p.emoji||'🎁',value:p.value||0,totalQty:p.qty,dayQty:base+extra};
+    })
   }));
+
   renderRegDays();
   document.getElementById('reg-seq-section').classList.remove('hidden');
 }
@@ -1159,6 +1204,31 @@ async function loadStats(){
       <div class="dsc"><div class="dsn">${rem}</div><div class="dsl">Premi rimasti</div></div>
     </div>`;
   }catch(e){el.innerHTML='<div style="color:#ff6b6b;font-size:13px">Errore</div>';}
+}
+
+// Restart confirmation (two-step)
+let resetStep=0;
+function confirmReset(){
+  const msg=document.getElementById('reset-msg');
+  const btn=document.querySelector('[onclick="confirmReset()"]');
+  if(resetStep===0){
+    resetStep=1;
+    btn.textContent='⚠ SICURO? CLICCA DI NUOVO PER CONFERMARE';
+    btn.style.background='#cc2222';
+    msg.textContent='Clicca di nuovo per confermare il reset. Questa azione è irreversibile.';
+    msg.style.color='#ff6b6b';
+    setTimeout(()=>{resetStep=0;btn.textContent='🗑 RESET COMPLETO DATI';btn.style.background='#8b1a1a';msg.textContent='';},5000);
+  } else {
+    resetStep=0;
+    btn.textContent='🗑 RESET COMPLETO DATI';btn.style.background='#8b1a1a';
+    msg.textContent='Reset in corso…';msg.style.color='#aaa';
+    window.DB.resetAll().then(()=>{
+      msg.textContent='✓ Reset completato. Tutti i dati di gioco sono stati cancellati.';
+      msg.style.color='#4ecdc4';
+      setTimeout(()=>msg.textContent='',4000);
+      loadStats();
+    }).catch(()=>{msg.textContent='❌ Errore durante il reset.';msg.style.color='#ff6b6b';});
+  }
 }
 </script>
 </body>
