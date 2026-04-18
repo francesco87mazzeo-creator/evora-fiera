@@ -578,6 +578,10 @@ const params=new URLSearchParams(window.location.search);
 const uName=params.get('name')||params.get('first_name')||'Ospite';
 const uEmail=params.get('email')||'';
 const uToken=params.get('token')||`demo_${Date.now()}`;
+  let savedRegData={
+  company:{name:'Evora',city:'',vat:''},
+  event:{name:'Evora Fiera 2026',venue:'evento fieristico'}
+};
 
 // ── REGULATION STATE ──────────────────────────────────────────────────────
 const DEFAULT_DATES=['2026-05-28','2026-05-29','2026-05-30','2026-05-31'];
@@ -656,8 +660,6 @@ function openPrivacyModal(){
 function closeRegModal(){document.getElementById('reg-modal').classList.add('hidden');document.body.style.overflow='';}
 document.addEventListener('keydown',e=>{if(e.key==='Escape')closeRegModal();});
 
-// savedRegData populated at boot from Firebase - used on user-facing pages
-let savedRegData={company:{name:'Evora',city:'',vat:''},event:{name:'Evora Fiera 2026',venue:'evento fieristico'}};
 
 // Format YYYY-MM-DD → "28 maggio 2026"
 function fmtDate(d){
