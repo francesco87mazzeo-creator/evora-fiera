@@ -596,6 +596,9 @@ window.addEventListener('db-ready',async()=>{
       if(reg.regDays) regDays=reg.regDays;
       if(reg.regLocked) regLocked=reg.regLocked;
       if(reg.admPrizes) admPrizes=reg.admPrizes;
+      // Save company/event data for user-facing modal
+      if(reg.company) savedRegData.company=reg.company;
+      if(reg.event) savedRegData.event=reg.event;
     }
   }catch(e){}
   buildRegulationModalText();
@@ -651,16 +654,22 @@ function openPrivacyModal(){
 function closeRegModal(){document.getElementById('reg-modal').classList.add('hidden');document.body.style.overflow='';}
 document.addEventListener('keydown',e=>{if(e.key==='Escape')closeRegModal();});
 
+// savedRegData populated at boot from Firebase - used on user-facing pages
+let savedRegData={company:{name:'Evora',city:'',vat:''},event:{name:'Evora Fiera 2026',venue:'evento fieristico'}};
+
 // Build regulation modal content with full sequences, day tabs
 function buildRegulationModalText(){
   const hasSeq=regSequences.some(s=>s&&s.length>0);
-  const evName=(document.getElementById('rg-event')?.value)||'Evora Fiera 2026';
-  const coName=(document.getElementById('rg-name')?.value)||'Evora';
-  const coCity=(document.getElementById('rg-city')?.value)||'';
-  const venue=(document.getElementById('rg-venue')?.value)||'evento fieristico';
+
+  // Use live DOM values if on admin page, otherwise use Firebase-loaded data
+  const evName=(document.getElementById('rg-event')?.value)||savedRegData.event?.name||'Evora Fiera 2026';
+  const coName=(document.getElementById('rg-name')?.value)||savedRegData.company?.name||'Evora';
+  const coCity=(document.getElementById('rg-city')?.value)||savedRegData.company?.city||'';
+  const coVat=(document.getElementById('rg-vat')?.value)||savedRegData.company?.vat||'';
+  const venue=(document.getElementById('rg-venue')?.value)||savedRegData.event?.venue||'evento fieristico';
   const today=new Date().toLocaleDateString('it-IT');
 
-  const dayDates=regDays.map((d,i)=>d.date?`<strong>${d.date}</strong>`:'').filter(Boolean).join(', ')||'28–31 maggio 2026';
+  const dayDates=regDays.map(d=>d.date?`<strong>${d.date}</strong>`:'').filter(Boolean).join(', ')||'28–31 maggio 2026';
   const prizesList=admPrizes.length
     ? admPrizes.map(p=>`${p.emoji||''} <strong>${p.name}</strong> × ${p.qty}`).join(' · ')
     : 'vedi stand Evora';
@@ -668,7 +677,7 @@ function buildRegulationModalText(){
   let seqHtml='';
   if(hasSeq){
     const tabs=regSequences.map((seq,i)=>seq&&seq.length>0
-      ? `<button class="reg-day-tab${i===0?' active':''}" onclick="switchRegDay(${i},this)">Giorno ${i+1}${regDays[i].date?' — '+regDays[i].date.slice(5):''}</button>`
+      ? `<button class="reg-day-tab${i===0?' active':''}" onclick="switchRegDay(${i},this)">G.${i+1}${regDays[i]?.date?' — '+regDays[i].date.slice(5):''}</button>`
       : '').join('');
     const panels=regSequences.map((seq,i)=>seq&&seq.length>0
       ? `<div class="reg-day-seq${i===0?' active':''}" id="reg-seq-panel-${i}">
@@ -681,32 +690,36 @@ function buildRegulationModalText(){
         </div>`
       : '').join('');
     seqHtml=`<h3>Art. 7 — Sequenze di Distribuzione</h3>
-      <p>Le sequenze complete dei premi per ogni giornata, generate con algoritmo deterministico, sono riportate di seguito:</p>
+      <p>Sequenze complete per giornata, generate con algoritmo deterministico prima dell'evento:</p>
       <div class="reg-day-tabs">${tabs}</div>
       ${panels}`;
   }
 
+  const a8=hasSeq?'Art. 8':'Art. 7';
+  const a9=hasSeq?'Art. 9':'Art. 8';
+  const a10=hasSeq?'Art. 10':'Art. 9';
+
   document.getElementById('reg-modal-content').innerHTML=`
     <h3>Art. 1 — Soggetto Promotore</h3>
-    <p><strong>${coName}</strong> organizza il presente concorso a premi ai sensi del D.P.R. 430/2001.</p>
+    <p><strong>${coName}</strong>${coVat?' — P.IVA '+coVat:''} organizza il presente concorso a premi ai sensi del D.P.R. 430/2001.</p>
     <h3>Art. 2 — Oggetto</h3>
     <p>Operazione denominata <strong>"${evName}"</strong> con finalità promozionali in occasione di ${venue}.</p>
     <h3>Art. 3 — Partecipazione</h3>
-    <p>Possono partecipare le persone fisiche maggiorenni che compilano il modulo di registrazione e partecipano al gioco digitale. <strong>Ogni persona può partecipare una sola volta.</strong></p>
+    <p>Persone fisiche maggiorenni che compilano il modulo di registrazione e partecipano al gioco digitale. <strong>Ogni persona può partecipare una sola volta.</strong></p>
     <h3>Art. 4 — Periodo</h3>
     <p>L'operazione si svolge nei giorni: ${dayDates}.</p>
     <h3>Art. 5 — Premi Disponibili</h3>
     <p>${prizesList}. I premi non sono convertibili in denaro e non sono cedibili a terzi.</p>
     <h3>Art. 6 — Meccanismo di Assegnazione</h3>
-    <p>I premi sono assegnati tramite <strong>sequenza predeterminata</strong> generata prima dell'evento con algoritmo Fisher-Yates deterministico. L'assegnazione segue l'ordine di partecipazione giornaliero.</p>
+    <p>I premi sono assegnati tramite <strong>sequenza predeterminata</strong> generata prima dell'evento con algoritmo Fisher-Yates deterministico. Nessuna componente casuale in tempo reale.</p>
     ${seqHtml}
-    <h3>${hasSeq?'Art. 8':'Art. 7'} — Consegna</h3>
-    <p>I premi vengono consegnati immediatamente presso lo stand, previa verifica del codice univoco assegnato al partecipante.</p>
-    <h3>${hasSeq?'Art. 9':'Art. 8'} — Privacy</h3>
-    <p>I dati personali sono trattati ai sensi del GDPR UE 2016/679 per gestione del concorso e, previo consenso, per marketing. Per il testo completo clicca "Privacy".</p>
-    <h3>${hasSeq?'Art. 10':'Art. 9'} — Foro Competente</h3>
-    <p>Foro competente: <strong>${coCity||'indicato nel regolamento completo'}</strong>. Normativa: D.P.R. 430/2001.</p>
-    <p style="margin-top:14px;font-size:11px;color:#444">Documento generato il ${today}.</p>`;
+    <h3>${a8} — Consegna dei Premi</h3>
+    <p>I premi vengono consegnati immediatamente presso lo stand Evora, previa verifica del codice univoco. Ogni codice è valido una sola volta.</p>
+    <h3>${a9} — Privacy</h3>
+    <p>I dati personali (nome, email) sono trattati ai sensi del GDPR UE 2016/679 per gestione del concorso e, previo consenso, per marketing. Per il testo completo clicca "Privacy".</p>
+    <h3>${a10} — Foro Competente</h3>
+    <p>Foro: <strong>${coCity||'indicato nel regolamento completo'}</strong>. Normativa: D.P.R. 430/2001.</p>
+    <p style="margin-top:14px;font-size:11px;color:#444">Generato il ${today}. Regolamento completo con allegati disponibile presso lo stand Evora.</p>`;
 }
 
 function switchRegDay(idx,btn){
@@ -718,11 +731,64 @@ function switchRegDay(idx,btn){
 }
 
 // ── GAME ──────────────────────────────────────────────────────────────────
+
+// Returns today's date as YYYY-MM-DD in local time
+function todayStr(){
+  const d=new Date();
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+
+// Check if today is one of the configured fair dates
+function isValidFairDay(){
+  const today=todayStr();
+  const validDates=regDays.map(d=>d.date).filter(Boolean);
+  if(!validDates.length) return true; // If no dates configured, allow (admin hasn't set up yet)
+  return validDates.includes(today);
+}
+
+// Returns the configured fair dates formatted nicely
+function fairDatesLabel(){
+  const dates=regDays.map(d=>d.date).filter(Boolean);
+  if(!dates.length) return '28–31 maggio 2026';
+  return dates.map(d=>{
+    const parts=d.split('-');
+    const months=['','gennaio','febbraio','marzo','aprile','maggio','giugno','luglio','agosto','settembre','ottobre','novembre','dicembre'];
+    return `${parseInt(parts[2])} ${months[parseInt(parts[1])]}`;
+  }).join(', ');
+}
+
 async function doShowGame(){
+  // ── DATE CHECK ──────────────────────────────────────────────────────────
+  if(!isValidFairDay()){
+    const dates=fairDatesLabel();
+    hideAll();showFooter();
+    // Show a friendly closed screen
+    const pg=document.getElementById('pg-welcome');
+    pg.classList.remove('hidden');
+    // Temporarily replace welcome content
+    pg.innerHTML=`
+      <div style="text-align:center;padding:20px 0;width:100%;max-width:420px;animation:fu .5s cubic-bezier(.16,1,.3,1) both">
+        <div style="font-family:var(--fd);font-size:13px;letter-spacing:6px;color:var(--g);text-transform:uppercase;margin-bottom:48px">EVORA <span style="color:var(--red)">●</span> FIERA 2026</div>
+        <div style="font-size:52px;margin-bottom:20px">🗓</div>
+        <div style="font-family:var(--fd);font-size:48px;font-weight:800;letter-spacing:2px;line-height:.95;text-transform:uppercase;margin-bottom:16px">
+          CONCORSO<br><em style="color:var(--red);font-style:normal">NON ATTIVO</em>
+        </div>
+        <div style="background:var(--s);border:1px solid var(--b);padding:24px;margin-bottom:28px;position:relative">
+          <div style="position:absolute;top:0;left:0;right:0;height:2px;background:var(--red)"></div>
+          <div style="font-family:var(--fd);font-size:11px;letter-spacing:4px;color:var(--g);text-transform:uppercase;margin-bottom:10px">Date del concorso</div>
+          <div style="font-size:15px;color:var(--w);font-weight:600;margin-bottom:8px">${dates}</div>
+          <div style="font-size:13px;color:#aaa;line-height:1.7">Il gioco è disponibile solo durante i giorni della fiera. Passa allo stand Evora nelle date indicate!</div>
+        </div>
+        <div style="font-family:var(--fd);font-size:11px;letter-spacing:3px;color:#444;text-transform:uppercase">EVORA · FIERA 2026</div>
+      </div>`;
+    return;
+  }
+
+  // ── NORMAL FLOW ─────────────────────────────────────────────────────────
   hideAll(); show('pg-game'); showFooter();
   try{
     cAsgn=await window.DB.assignPrize(cUser.token,cUser.name,cUser.email);
-    if(!cAsgn){alert('Tutti i premi sono esauriti. Grazie per aver partecipato!');showWelcome();return;}
+    if(!cAsgn){alert('Tutti i premi sono esauriti per oggi. Grazie per aver partecipato!');showWelcome();return;}
   }catch(e){alert('Errore di connessione. Riprova.');showWelcome();return;}
   document.getElementById('tnum').textContent='#'+cAsgn.id.slice(-6).toUpperCase();
   document.getElementById('tser').textContent=`EVR · 2026 · ${cAsgn.code}`;
@@ -1004,12 +1070,13 @@ function schedSave(){
 
 async function saveRegulationConfig(){
   try{
-    const payload={
-      company:{name:document.getElementById('rg-name')?.value||'',vat:document.getElementById('rg-vat')?.value||'',addr:document.getElementById('rg-addr')?.value||'',city:document.getElementById('rg-city')?.value||'',email:document.getElementById('rg-email')?.value||''},
-      event:{name:document.getElementById('rg-event')?.value||'',venue:document.getElementById('rg-venue')?.value||''},
-      regDays,regSequences,regLocked,admPrizes
-    };
+    const company={name:document.getElementById('rg-name')?.value||'',vat:document.getElementById('rg-vat')?.value||'',addr:document.getElementById('rg-addr')?.value||'',city:document.getElementById('rg-city')?.value||'',email:document.getElementById('rg-email')?.value||''};
+    const event={name:document.getElementById('rg-event')?.value||'',venue:document.getElementById('rg-venue')?.value||''};
+    const payload={company,event,regDays,regSequences,regLocked,admPrizes};
     await window.DB.saveConfig('regulation',payload);
+    // Update in-memory data so modal stays correct
+    savedRegData.company=company;
+    savedRegData.event=event;
     buildRegulationModalText();
   }catch(e){console.error('saveRegulationConfig error',e);}
 }
