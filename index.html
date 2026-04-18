@@ -93,14 +93,16 @@
       await setDoc(doc(db,"config",key),{value:val});
     }
 
-    // ── RESET: delete all assignments + reset prize counters ──────────────
+    // ── RESET: full tabula rasa ───────────────────────────────────────────
     async function resetAll(){
+      // 1. Delete all assignments
       const asnSnap=await getDocs(collection(db,"assignments"));
-      const delPromises=asnSnap.docs.map(d=>deleteDoc(doc(db,"assignments",d.id)));
-      await Promise.all(delPromises);
+      await Promise.all(asnSnap.docs.map(d=>deleteDoc(doc(db,"assignments",d.id))));
+      // 2. Reset assigned counters on prizes
       const prSnap=await getDocs(collection(db,"prizes"));
-      const updPromises=prSnap.docs.map(d=>updateDoc(doc(db,"prizes",d.id),{assigned:0}));
-      await Promise.all(updPromises);
+      await Promise.all(prSnap.docs.map(d=>updateDoc(doc(db,"prizes",d.id),{assigned:0})));
+      // 3. Delete regulation config (sequences, days, company data, etc.)
+      try{await deleteDoc(doc(db,"config","regulation"));}catch(e){}
     }
 
     window.DB={initPrizes,assignPrize,markDelivered,getAllAssignments,findByCode,getPrizes,savePrizes,listenAssignment,getConfig,saveConfig,resetAll};
@@ -657,11 +659,19 @@ document.addEventListener('keydown',e=>{if(e.key==='Escape')closeRegModal();});
 // savedRegData populated at boot from Firebase - used on user-facing pages
 let savedRegData={company:{name:'Evora',city:'',vat:''},event:{name:'Evora Fiera 2026',venue:'evento fieristico'}};
 
+// Format YYYY-MM-DD → "28 maggio 2026"
+function fmtDate(d){
+  if(!d)return'';
+  const months=['','gennaio','febbraio','marzo','aprile','maggio','giugno','luglio','agosto','settembre','ottobre','novembre','dicembre'];
+  const p=d.split('-');
+  return`${parseInt(p[2])} ${months[parseInt(p[1])]} ${p[0]}`;
+}
+
 // Build regulation modal content with full sequences, day tabs
 function buildRegulationModalText(){
   const hasSeq=regSequences.some(s=>s&&s.length>0);
 
-  // Use live DOM values if on admin page, otherwise use Firebase-loaded data
+  // Use live DOM values if on admin page, otherwise use Firebase-loaded savedRegData
   const evName=(document.getElementById('rg-event')?.value)||savedRegData.event?.name||'Evora Fiera 2026';
   const coName=(document.getElementById('rg-name')?.value)||savedRegData.company?.name||'Evora';
   const coCity=(document.getElementById('rg-city')?.value)||savedRegData.company?.city||'';
@@ -669,10 +679,62 @@ function buildRegulationModalText(){
   const venue=(document.getElementById('rg-venue')?.value)||savedRegData.event?.venue||'evento fieristico';
   const today=new Date().toLocaleDateString('it-IT');
 
-  const dayDates=regDays.map(d=>d.date?`<strong>${d.date}</strong>`:'').filter(Boolean).join(', ')||'28–31 maggio 2026';
-  const prizesList=admPrizes.length
-    ? admPrizes.map(p=>`${p.emoji||''} <strong>${p.name}</strong> × ${p.qty}`).join(' · ')
+  // Format dates nicely: "28 maggio, 29 maggio, ..."
+  const dayDates=regDays.map(d=>d.date?`<strong>${fmtDate(d.date)}</strong>`:'').filter(Boolean).join(', ')||'28–31 maggio 2026';
+
+  // Use admPrizes if loaded, otherwise fall back to savedRegData.admPrizes
+  const prizeSrc=(admPrizes&&admPrizes.length>0)?admPrizes:(savedRegData.admPrizes||[]);
+  const prizesList=prizeSrc.length
+    ? prizeSrc.map(p=>`${p.emoji||''} <strong>${p.name}</strong> × ${p.qty}`).join(' · ')
     : 'vedi stand Evora';
+
+  let seqHtml='';
+  if(hasSeq){
+    const tabs=regSequences.map((seq,i)=>seq&&seq.length>0
+      ? `<button class="reg-day-tab${i===0?' active':''}" onclick="switchRegDay(${i},this)">Giorno ${i+1}${regDays[i]?.date?' — '+fmtDate(regDays[i].date).slice(0,-5):''}</button>`
+      : '').join('');
+    const panels=regSequences.map((seq,i)=>seq&&seq.length>0
+      ? `<div class="reg-day-seq${i===0?' active':''}" id="reg-seq-panel-${i}">
+          <div style="font-size:11px;color:#555;margin-bottom:6px;font-family:var(--fd);letter-spacing:1px">${seq.length} PREMI · SEED ${makeSeed(i,evName)}</div>
+          <div class="reg-seq-wrap">
+            <table class="reg-seq-table">
+              ${seq.map((p,idx)=>`<tr><td>${idx+1}</td><td>${p.emoji||'🎁'}</td><td>${p.name}</td><td>€${parseFloat(p.value||0).toFixed(2)}</td></tr>`).join('')}
+            </table>
+          </div>
+        </div>`
+      : '').join('');
+    seqHtml=`<h3>Art. 7 — Sequenze di Distribuzione</h3>
+      <p>Sequenze complete per giornata, generate con algoritmo deterministico prima dell'evento:</p>
+      <div class="reg-day-tabs">${tabs}</div>
+      ${panels}`;
+  }
+
+  const a8=hasSeq?'Art. 8':'Art. 7';
+  const a9=hasSeq?'Art. 9':'Art. 8';
+  const a10=hasSeq?'Art. 10':'Art. 9';
+
+  document.getElementById('reg-modal-content').innerHTML=`
+    <h3>Art. 1 — Soggetto Promotore</h3>
+    <p><strong>${coName}</strong>${coVat?' — P.IVA '+coVat:''} organizza il presente concorso a premi ai sensi del D.P.R. 430/2001.</p>
+    <h3>Art. 2 — Oggetto</h3>
+    <p>Operazione denominata <strong>"${evName}"</strong> con finalità promozionali in occasione di ${venue}.</p>
+    <h3>Art. 3 — Partecipazione</h3>
+    <p>Persone fisiche maggiorenni che compilano il modulo di registrazione e partecipano al gioco digitale. <strong>Ogni persona può partecipare una sola volta.</strong></p>
+    <h3>Art. 4 — Periodo</h3>
+    <p>L'operazione si svolge nei giorni: ${dayDates}.</p>
+    <h3>Art. 5 — Premi Disponibili</h3>
+    <p>${prizesList}. I premi non sono convertibili in denaro e non sono cedibili a terzi.</p>
+    <h3>Art. 6 — Meccanismo di Assegnazione</h3>
+    <p>I premi sono assegnati tramite <strong>sequenza predeterminata</strong> generata prima dell'evento con algoritmo Fisher-Yates deterministico. Nessuna componente casuale in tempo reale.</p>
+    ${seqHtml}
+    <h3>${a8} — Consegna dei Premi</h3>
+    <p>I premi vengono consegnati immediatamente presso lo stand Evora, previa verifica del codice univoco. Ogni codice è valido una sola volta.</p>
+    <h3>${a9} — Privacy</h3>
+    <p>I dati personali (nome, email) sono trattati ai sensi del GDPR UE 2016/679 per gestione del concorso e, previo consenso, per marketing. Per il testo completo clicca "Privacy".</p>
+    <h3>${a10} — Foro Competente</h3>
+    <p>Foro: <strong>${coCity||'indicato nel regolamento completo'}</strong>. Normativa: D.P.R. 430/2001.</p>
+    <p style="margin-top:14px;font-size:11px;color:#444">Generato il ${today}. Regolamento completo con allegati disponibile presso lo stand Evora.</p>`;
+}
 
   let seqHtml='';
   if(hasSeq){
@@ -1044,7 +1106,14 @@ function confirmReset(){
     window.DB.resetAll()
       .then(async()=>{
         btn.disabled=false;
-        msg.textContent='✓ Reset completato. Tutti i dati di gioco eliminati.';
+        // Clear all in-memory regulation state
+        regDays=DEFAULT_DATES.map(date=>({date,dist:[]}));
+        regSequences=[[],[],[],[]];
+        regLocked=false;
+        admPrizes=[];
+        savedRegData={company:{name:'Evora',city:'',vat:''},event:{name:'Evora Fiera 2026',venue:'evento fieristico'}};
+        buildRegulationModalText();
+        msg.textContent='✓ Reset completato. Tutti i dati eliminati.';
         msg.style.color='#4ecdc4';
         setTimeout(()=>msg.textContent='',5000);
         await loadStats();
