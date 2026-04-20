@@ -34,13 +34,65 @@
     }
 
     async function assignPrize(token,name,email){
+      // Check if already assigned
       const ex=await getDoc(doc(db,"assignments",token));
       if(ex.exists()) return ex.data();
+
+      // ── Get today's day index from fairDates ─────────────────────────────
+      const today=new Date();
+      const todayStr=`${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
+
+      const fdSnap=await getDoc(doc(db,"config","fairDates"));
+      const fairDates=fdSnap.exists()?fdSnap.data().value:[];
+      const dayIndex=fairDates.indexOf(todayStr); // -1 if not found
+
+      // ── Try to use day sequence if available ─────────────────────────────
+      if(dayIndex>=0){
+        const regSnap=await getDoc(doc(db,"config","regulation"));
+        if(regSnap.exists()){
+          const reg=regSnap.data().value;
+          const daySeq=reg.regSequences&&reg.regSequences[dayIndex];
+          if(daySeq&&daySeq.length>0){
+            // Count how many prizes already assigned TODAY from this day's sequence
+            // We query all assignments and filter by date client-side to avoid Firestore composite index
+            const allAsgn=await getDocs(collection(db,"assignments"));
+            const countToday=allAsgn.docs.filter(d=>{
+              const a=d.data();
+              return a.assignedAt&&a.assignedAt.startsWith(todayStr)&&a.dayIndex===dayIndex;
+            }).length;
+
+            // Get next prize in sequence for today
+            if(countToday<daySeq.length){
+              const prize=daySeq[countToday];
+              const code=`EVR-G${dayIndex+1}-${Math.random().toString(36).substring(2,6).toUpperCase()}`;
+              const asgn={
+                id:token,userToken:token,userName:name,userEmail:email,
+                prizeId:`day${dayIndex}_pos${countToday}`,
+                prizeName:prize.name,
+                prizeEmoji:prize.emoji||'🎁',
+                prizeDesc:prize.desc||prize.name,
+                prizeColor:'#B22222',
+                code,status:"assigned",
+                assignedAt:new Date().toISOString(),
+                deliveredAt:null,
+                dayIndex,
+                seqPosition:countToday
+              };
+              await setDoc(doc(db,"assignments",token),asgn);
+              return asgn;
+            } else {
+              return null; // All prizes for today exhausted
+            }
+          }
+        }
+      }
+
+      // ── Fallback: use global prizes list (if no sequence configured) ─────
       const snap=await getDocs(query(collection(db,"prizes"),orderBy("order")));
       const avail=snap.docs.map(d=>({id:d.id,...d.data()})).find(p=>p.assigned<p.qty);
       if(!avail) return null;
       const code=`EVR-${avail.id.toUpperCase()}-${Math.random().toString(36).substring(2,6).toUpperCase()}`;
-      const asgn={id:token,userToken:token,userName:name,userEmail:email,prizeId:avail.id,prizeName:avail.name,prizeEmoji:avail.emoji,prizeDesc:avail.desc,prizeColor:avail.color,code,status:"assigned",assignedAt:new Date().toISOString(),deliveredAt:null};
+      const asgn={id:token,userToken:token,userName:name,userEmail:email,prizeId:avail.id,prizeName:avail.name,prizeEmoji:avail.emoji,prizeDesc:avail.desc||avail.name,prizeColor:avail.color,code,status:"assigned",assignedAt:new Date().toISOString(),deliveredAt:null};
       await runTransaction(db,async tx=>{
         const pr=doc(db,"prizes",avail.id);
         const f=await tx.get(pr);
@@ -98,11 +150,15 @@
       // 1. Delete all assignments
       const asnSnap=await getDocs(collection(db,"assignments"));
       await Promise.all(asnSnap.docs.map(d=>deleteDoc(doc(db,"assignments",d.id))));
-      // 2. Reset assigned counters on prizes
+      // 2. Reset assigned counters on prizes (keep prize config, just zero the counter)
       const prSnap=await getDocs(collection(db,"prizes"));
       await Promise.all(prSnap.docs.map(d=>updateDoc(doc(db,"prizes",d.id),{assigned:0})));
-      // 3. Delete regulation config (sequences, days, company data, etc.)
+      // 3. Delete regulation config
       try{await deleteDoc(doc(db,"config","regulation"));}catch(e){}
+      // 4. Delete uploaded regulation HTML
+      try{await deleteDoc(doc(db,"config","regulation_html"));}catch(e){}
+      // 5. Delete fair dates
+      try{await deleteDoc(doc(db,"config","fairDates"));}catch(e){}
     }
 
     window.DB={initPrizes,assignPrize,markDelivered,getAllAssignments,findByCode,getPrizes,savePrizes,listenAssignment,getConfig,saveConfig,resetAll};
@@ -275,6 +331,22 @@
     .mba{display:flex;gap:10px}
     .mbc{flex:1;padding:12px;background:transparent;border:1px solid var(--b);color:var(--g);cursor:pointer;font-family:var(--fb)}
     .mbcf{flex:1;padding:12px;background:var(--red);color:white;border:none;cursor:pointer;font-family:var(--fd);font-size:15px;letter-spacing:2px;font-weight:700}
+
+    #upload-reg-label:hover{border-color:var(--red);}
+    #upload-reg-label:hover div:first-of-type{color:var(--red);}
+
+    /* Uploaded regulation HTML shown inside dark modal */
+    #reg-modal-content h1,#reg-modal-content h2{font-family:var(--fd);font-size:14px;font-weight:700;letter-spacing:2px;color:var(--red);text-transform:uppercase;margin:16px 0 5px;border:none;padding:0;background:none}
+    #reg-modal-content h1{font-size:16px;color:var(--w);text-align:left}
+    #reg-modal-content p{font-size:13px;color:#aaa;line-height:1.7;margin-bottom:8px}
+    #reg-modal-content table{width:100%;border-collapse:collapse;font-size:12px;margin:10px 0}
+    #reg-modal-content th{background:var(--s2);padding:7px 10px;text-align:left;border:1px solid var(--b);color:var(--g);font-size:11px;letter-spacing:1px;text-transform:uppercase}
+    #reg-modal-content td{padding:6px 10px;border:1px solid var(--b);color:#aaa}
+    #reg-modal-content tr:nth-child(even) td{background:rgba(255,255,255,.02)}
+    #reg-modal-content strong{color:var(--w)}
+    #reg-modal-content .hdr{background:transparent;border:1px solid var(--b);text-align:center;padding:16px;margin-bottom:16px}
+    #reg-modal-content .ft,.reg-modal-content .sm{color:#444;font-size:11px}
+    #reg-modal-content .pb{border-top:1px solid var(--b);margin-top:20px;padding-top:20px}
 
     /* EFFECTS */
     #glow{position:fixed;inset:0;pointer-events:none;z-index:40}
@@ -550,6 +622,26 @@
           <button class="adbb o" onclick="downloadRegulationHTML()">📄 Scarica Regolamento HTML</button>
         </div>
       </div>
+
+      <!-- UPLOAD REGULATION FOR USER POPUP -->
+      <div style="margin-top:20px;padding-top:20px;border-top:1px solid var(--b)">
+        <div style="font-family:var(--fd);font-size:12px;letter-spacing:3px;color:var(--red);text-transform:uppercase;margin-bottom:8px">CARICA REGOLAMENTO NEL POPUP UTENTE</div>
+        <div style="font-size:13px;color:var(--g);margin-bottom:14px;line-height:1.6">
+          Scarica il regolamento HTML qui sopra, poi caricalo qui. Gli utenti vedranno il testo completo cliccando "Regolamento" in fondo alla pagina.
+        </div>
+        <label id="upload-reg-label" style="display:flex;align-items:center;gap:12px;padding:14px 18px;background:#0a0a0a;border:2px dashed var(--b);cursor:pointer;transition:border-color .15s">
+          <span style="font-size:24px">📄</span>
+          <div>
+            <div style="font-family:var(--fd);font-size:14px;letter-spacing:1px;color:var(--w)">Seleziona il file regolamento HTML</div>
+            <div style="font-size:12px;color:var(--g);margin-top:2px" id="upload-reg-filename">Nessun file selezionato</div>
+          </div>
+          <input type="file" accept=".html,.htm,.txt" id="upload-reg-input" style="display:none" onchange="loadRegulationFile(this)"/>
+        </label>
+        <div class="abr">
+          <button class="adbb" id="upload-reg-btn" onclick="saveUploadedRegulation()" style="opacity:.4;pointer-events:none">💾 Salva nel popup utente</button>
+        </div>
+        <div class="adsv" id="upload-reg-msg"></div>
+      </div>
       <div class="adsv" id="reg-msg"></div>
     </div>
   </div>
@@ -578,10 +670,6 @@ const params=new URLSearchParams(window.location.search);
 const uName=params.get('name')||params.get('first_name')||'Ospite';
 const uEmail=params.get('email')||'';
 const uToken=params.get('token')||`demo_${Date.now()}`;
-  let savedRegData={
-  company:{name:'Evora',city:'',vat:''},
-  event:{name:'Evora Fiera 2026',venue:'evento fieristico'}
-};
 
 // ── REGULATION STATE ──────────────────────────────────────────────────────
 const DEFAULT_DATES=['2026-05-28','2026-05-29','2026-05-30','2026-05-31'];
@@ -602,11 +690,23 @@ window.addEventListener('db-ready',async()=>{
       if(reg.regDays) regDays=reg.regDays;
       if(reg.regLocked) regLocked=reg.regLocked;
       if(reg.admPrizes) admPrizes=reg.admPrizes;
-      // Save company/event data for user-facing modal
       if(reg.company) savedRegData.company=reg.company;
       if(reg.event) savedRegData.event=reg.event;
+      if(reg.admPrizes) savedRegData.admPrizes=reg.admPrizes;
     }
   }catch(e){}
+  // Load uploaded regulation HTML for user popup
+  try{
+    const regHtml=await window.DB.getConfig('regulation_html');
+    if(regHtml) savedRegData.regulationHtml=regHtml;
+  }catch(e){}
+  // Fallback: if no saved regulation, load prizes from Firebase directly
+  if(!admPrizes.length){
+    try{
+      const prizes=await window.DB.getPrizes();
+      if(prizes.length){ admPrizes=prizes; savedRegData.admPrizes=prizes; }
+    }catch(e){}
+  }
   buildRegulationModalText();
   document.getElementById('loader').style.opacity='0';
   setTimeout(()=>{
@@ -642,6 +742,21 @@ function logoutAdmin(){showWelcome();}
 // ── REGULATION MODAL ──────────────────────────────────────────────────────
 function openRegModal(){
   document.getElementById('reg-modal-title').textContent='REGOLAMENTO';
+  // If admin has uploaded a full regulation HTML, show that inside the modal
+  if(savedRegData.regulationHtml){
+    // Strip outer HTML tags, keep only body content for display inside modal
+    const tmp=document.createElement('div');
+    tmp.innerHTML=savedRegData.regulationHtml;
+    // Try to extract body content
+    const body=tmp.querySelector('body');
+    const inner=body?body.innerHTML:tmp.innerHTML;
+    // Apply modal-friendly styles wrapper
+    document.getElementById('reg-modal-content').innerHTML=
+      `<div style="font-family:var(--fb);font-size:13px;line-height:1.8;color:#aaa">${inner}</div>`;
+  } else {
+    // Fall back to auto-generated regulation text
+    buildRegulationModalText();
+  }
   document.getElementById('reg-modal').classList.remove('hidden');
   document.body.style.overflow='hidden';
 }
@@ -660,6 +775,8 @@ function openPrivacyModal(){
 function closeRegModal(){document.getElementById('reg-modal').classList.add('hidden');document.body.style.overflow='';}
 document.addEventListener('keydown',e=>{if(e.key==='Escape')closeRegModal();});
 
+// savedRegData populated at boot from Firebase - used on user-facing pages
+let savedRegData={company:{name:'Evora',city:'',vat:''},event:{name:'Evora Fiera 2026',venue:'evento fieristico'}};
 
 // Format YYYY-MM-DD → "28 maggio 2026"
 function fmtDate(d){
@@ -738,53 +855,6 @@ function buildRegulationModalText(){
     <p style="margin-top:14px;font-size:11px;color:#444">Generato il ${today}. Regolamento completo con allegati disponibile presso lo stand Evora.</p>`;
 }
 
-  let seqHtml='';
-  if(hasSeq){
-    const tabs=regSequences.map((seq,i)=>seq&&seq.length>0
-      ? `<button class="reg-day-tab${i===0?' active':''}" onclick="switchRegDay(${i},this)">G.${i+1}${regDays[i]?.date?' — '+regDays[i].date.slice(5):''}</button>`
-      : '').join('');
-    const panels=regSequences.map((seq,i)=>seq&&seq.length>0
-      ? `<div class="reg-day-seq${i===0?' active':''}" id="reg-seq-panel-${i}">
-          <div style="font-size:11px;color:#555;margin-bottom:6px;font-family:var(--fd);letter-spacing:1px">${seq.length} PREMI · SEED ${makeSeed(i,evName)}</div>
-          <div class="reg-seq-wrap">
-            <table class="reg-seq-table">
-              ${seq.map((p,idx)=>`<tr><td>${idx+1}</td><td>${p.emoji||'🎁'}</td><td>${p.name}</td><td>€${parseFloat(p.value||0).toFixed(2)}</td></tr>`).join('')}
-            </table>
-          </div>
-        </div>`
-      : '').join('');
-    seqHtml=`<h3>Art. 7 — Sequenze di Distribuzione</h3>
-      <p>Sequenze complete per giornata, generate con algoritmo deterministico prima dell'evento:</p>
-      <div class="reg-day-tabs">${tabs}</div>
-      ${panels}`;
-  }
-
-  const a8=hasSeq?'Art. 8':'Art. 7';
-  const a9=hasSeq?'Art. 9':'Art. 8';
-  const a10=hasSeq?'Art. 10':'Art. 9';
-
-  document.getElementById('reg-modal-content').innerHTML=`
-    <h3>Art. 1 — Soggetto Promotore</h3>
-    <p><strong>${coName}</strong>${coVat?' — P.IVA '+coVat:''} organizza il presente concorso a premi ai sensi del D.P.R. 430/2001.</p>
-    <h3>Art. 2 — Oggetto</h3>
-    <p>Operazione denominata <strong>"${evName}"</strong> con finalità promozionali in occasione di ${venue}.</p>
-    <h3>Art. 3 — Partecipazione</h3>
-    <p>Persone fisiche maggiorenni che compilano il modulo di registrazione e partecipano al gioco digitale. <strong>Ogni persona può partecipare una sola volta.</strong></p>
-    <h3>Art. 4 — Periodo</h3>
-    <p>L'operazione si svolge nei giorni: ${dayDates}.</p>
-    <h3>Art. 5 — Premi Disponibili</h3>
-    <p>${prizesList}. I premi non sono convertibili in denaro e non sono cedibili a terzi.</p>
-    <h3>Art. 6 — Meccanismo di Assegnazione</h3>
-    <p>I premi sono assegnati tramite <strong>sequenza predeterminata</strong> generata prima dell'evento con algoritmo Fisher-Yates deterministico. Nessuna componente casuale in tempo reale.</p>
-    ${seqHtml}
-    <h3>${a8} — Consegna dei Premi</h3>
-    <p>I premi vengono consegnati immediatamente presso lo stand Evora, previa verifica del codice univoco. Ogni codice è valido una sola volta.</p>
-    <h3>${a9} — Privacy</h3>
-    <p>I dati personali (nome, email) sono trattati ai sensi del GDPR UE 2016/679 per gestione del concorso e, previo consenso, per marketing. Per il testo completo clicca "Privacy".</p>
-    <h3>${a10} — Foro Competente</h3>
-    <p>Foro: <strong>${coCity||'indicato nel regolamento completo'}</strong>. Normativa: D.P.R. 430/2001.</p>
-    <p style="margin-top:14px;font-size:11px;color:#444">Generato il ${today}. Regolamento completo con allegati disponibile presso lo stand Evora.</p>`;
-}
 
 function switchRegDay(idx,btn){
   document.querySelectorAll('.reg-day-tab').forEach(b=>b.classList.remove('active'));
@@ -806,7 +876,10 @@ function todayStr(){
 function isValidFairDay(){
   const today=todayStr();
   const validDates=regDays.map(d=>d.date).filter(Boolean);
-  if(!validDates.length) return true; // If no dates configured, allow (admin hasn't set up yet)
+  // No dates configured yet → allow (admin hasn't set up, or testing)
+  if(!validDates.length) return true;
+  // If all dates are the default placeholder dates AND none match today,
+  // check if they are truly custom dates or just defaults never changed
   return validDates.includes(today);
 }
 
@@ -822,14 +895,37 @@ function fairDatesLabel(){
 }
 
 async function doShowGame(){
-  // ── DATE CHECK ──────────────────────────────────────────────────────────
-  if(!isValidFairDay()){
-    const dates=fairDatesLabel();
+  // ── FETCH FRESH DATES FROM FIREBASE ──────────────────────────────────────
+  // Read dedicated fairDates key first (fastest), fallback to regDays
+  let fairDates=[];
+  try{
+    const fd=await window.DB.getConfig('fairDates');
+    if(fd&&fd.length>0){
+      fairDates=fd;
+    } else {
+      // Fallback: read from full regulation config
+      const reg=await window.DB.getConfig('regulation');
+      if(reg&&reg.regDays&&reg.regDays.length>0){
+        regDays=reg.regDays;
+        fairDates=reg.regDays.map(d=>d.date).filter(Boolean);
+      }
+    }
+  }catch(e){}
+
+  // ── DATE CHECK ────────────────────────────────────────────────────────────
+  const today=todayStr();
+  const dateOk = fairDates.length===0 || fairDates.includes(today);
+
+  if(!dateOk){
+    const months=['','gennaio','febbraio','marzo','aprile','maggio','giugno','luglio','agosto','settembre','ottobre','novembre','dicembre'];
+    const label=fairDates.map(d=>{
+      const p=d.split('-');
+      return `${parseInt(p[2])} ${months[parseInt(p[1])]} ${p[0]}`;
+    }).join(', ');
+
     hideAll();showFooter();
-    // Show a friendly closed screen
     const pg=document.getElementById('pg-welcome');
     pg.classList.remove('hidden');
-    // Temporarily replace welcome content
     pg.innerHTML=`
       <div style="text-align:center;padding:20px 0;width:100%;max-width:420px;animation:fu .5s cubic-bezier(.16,1,.3,1) both">
         <div style="font-family:var(--fd);font-size:13px;letter-spacing:6px;color:var(--g);text-transform:uppercase;margin-bottom:48px">EVORA <span style="color:var(--red)">●</span> FIERA 2026</div>
@@ -840,7 +936,7 @@ async function doShowGame(){
         <div style="background:var(--s);border:1px solid var(--b);padding:24px;margin-bottom:28px;position:relative">
           <div style="position:absolute;top:0;left:0;right:0;height:2px;background:var(--red)"></div>
           <div style="font-family:var(--fd);font-size:11px;letter-spacing:4px;color:var(--g);text-transform:uppercase;margin-bottom:10px">Date del concorso</div>
-          <div style="font-size:15px;color:var(--w);font-weight:600;margin-bottom:8px">${dates}</div>
+          <div style="font-size:15px;color:var(--w);font-weight:600;margin-bottom:8px">${label}</div>
           <div style="font-size:13px;color:#aaa;line-height:1.7">Il gioco è disponibile solo durante i giorni della fiera. Passa allo stand Evora nelle date indicate!</div>
         </div>
         <div style="font-family:var(--fd);font-size:11px;letter-spacing:3px;color:#444;text-transform:uppercase">EVORA · FIERA 2026</div>
@@ -848,7 +944,7 @@ async function doShowGame(){
     return;
   }
 
-  // ── NORMAL FLOW ─────────────────────────────────────────────────────────
+  // ── NORMAL FLOW ───────────────────────────────────────────────────────────
   hideAll(); show('pg-game'); showFooter();
   try{
     cAsgn=await window.DB.assignPrize(cUser.token,cUser.name,cUser.email);
@@ -1108,17 +1204,44 @@ function confirmReset(){
     window.DB.resetAll()
       .then(async()=>{
         btn.disabled=false;
-        // Clear all in-memory regulation state
+
+        // ── Clear all in-memory state ──────────────────────────────────────
         regDays=DEFAULT_DATES.map(date=>({date,dist:[]}));
         regSequences=[[],[],[],[]];
         regLocked=false;
         admPrizes=[];
         savedRegData={company:{name:'Evora',city:'',vat:''},event:{name:'Evora Fiera 2026',venue:'evento fieristico'}};
+        // Clear uploaded regulation
+        uploadedRegulationContent=null;
+        document.getElementById('upload-reg-filename').textContent='Nessun file selezionato';
+        const uploadBtn=document.getElementById('upload-reg-btn');
+        if(uploadBtn){uploadBtn.style.opacity='.4';uploadBtn.style.pointerEvents='none';}
+        document.getElementById('upload-reg-input').value='';
+
+        // ── Reset Admin UI ─────────────────────────────────────────────────
+        // Prizes section
+        renderPCfg();
+
+        // Regulation section — clear fields
+        ['rg-name','rg-vat','rg-addr','rg-city','rg-email','rg-event','rg-venue'].forEach(id=>{
+          const el=document.getElementById(id);
+          if(el) el.value='';
+        });
+        document.getElementById('reg-days').innerHTML='<div style="color:var(--g);font-size:13px">Salva prima i premi, poi clicca "Carica giorni".</div>';
+        document.getElementById('reg-seq-section').classList.add('hidden');
+        document.getElementById('reg-output').classList.add('hidden');
+        document.getElementById('reg-day-previews').innerHTML='';
+
+        // Reload prizes from Firebase (they still exist, just counters reset)
+        await loadPrizes();
+
+        // Update modal and stats
         buildRegulationModalText();
-        msg.textContent='✓ Reset completato. Tutti i dati eliminati.';
-        msg.style.color='#4ecdc4';
-        setTimeout(()=>msg.textContent='',5000);
         await loadStats();
+
+        msg.textContent='✓ Reset completato — premi, sequenze, giocatori e configurazione eliminati.';
+        msg.style.color='#4ecdc4';
+        setTimeout(()=>msg.textContent='',6000);
       })
       .catch(err=>{
         btn.disabled=false;
@@ -1250,6 +1373,16 @@ function updateRegGrandValidation(){
 }
 
 async function generateRegulation(){
+  // ── Read dates fresh from DOM inputs before anything else ─────────────
+  document.querySelectorAll('[id^="reg-day-input-"]').forEach((el,i)=>{
+    if(regDays[i]) regDays[i].date=el.value;
+  });
+  // Also read from the rendered inputs (they use onchange but may not have fired)
+  const dateInputs=document.querySelectorAll('#reg-days input[type="date"]');
+  dateInputs.forEach((el,i)=>{
+    if(regDays[i]&&el.value) regDays[i].date=el.value;
+  });
+
   let err=false;
   admPrizes.forEach((p,pi)=>{if(regDays.reduce((s,d)=>s+(parseInt((d.dist||[])[pi]?.dayQty)||0),0)>p.qty)err=true;});
   if(err){alert('Errore: hai distribuito più premi del totale. Correggi prima.');return;}
@@ -1266,6 +1399,10 @@ async function generateRegulation(){
   setTimeout(()=>document.getElementById('reg-msg').textContent='',3000);
   buildRegulationModalText();
   await saveRegulationConfig();
+
+  // ── Save fair dates separately for fast lookup ─────────────────────────
+  const fairDates=regDays.map(d=>d.date).filter(Boolean);
+  await window.DB.saveConfig('fairDates', fairDates);
 }
 
 function renderRegOutput(){
@@ -1333,6 +1470,43 @@ function downloadRegulationHTML(){
 ${regSequences.map((seq,i)=>seq&&seq.length>0?`<div class="pb"><h2>ALLEGATO ${i+1} — GIORNO ${i+1}: ${regDays[i].date||'—'}</h2><p class="sm">Seed: ${makeSeed(i,evName)} | ${today} | ${seq.length} premi</p><table><tr><th style="width:60px">#</th><th>Premio</th><th style="width:120px">Valore €</th></tr>${seq.map((p,idx)=>`<tr><td>${idx+1}</td><td>${p.emoji||''} ${p.name}</td><td>€${parseFloat(p.value||0).toFixed(2)}</td></tr>`).join('')}</table></div>`:'').join('')}
 <div class="ft">— Fine del Regolamento — ${today} —</div></body></html>`;
   dlFile(html,`regolamento_${evName.replace(/\s+/g,'_')}_${today.replace(/\//g,'-')}.html`,'text/html');
+}
+
+// ── UPLOAD REGULATION TO FIREBASE (for user popup) ────────────────────────
+let uploadedRegulationContent = null;
+
+function loadRegulationFile(input){
+  const file = input.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    uploadedRegulationContent = e.target.result;
+    document.getElementById('upload-reg-filename').textContent = file.name;
+    const btn = document.getElementById('upload-reg-btn');
+    btn.style.opacity = '1';
+    btn.style.pointerEvents = 'auto';
+    document.getElementById('upload-reg-msg').textContent = '✓ File pronto — clicca "Salva" per pubblicarlo';
+    document.getElementById('upload-reg-msg').style.color = '#4ecdc4';
+  };
+  reader.readAsText(file);
+}
+
+async function saveUploadedRegulation(){
+  if(!uploadedRegulationContent) return;
+  const msg = document.getElementById('upload-reg-msg');
+  const btn = document.getElementById('upload-reg-btn');
+  btn.disabled = true;
+  msg.textContent = 'Salvataggio…'; msg.style.color = '#aaa';
+  try{
+    await window.DB.saveConfig('regulation_html', uploadedRegulationContent);
+    msg.textContent = '✓ Regolamento pubblicato — visibile agli utenti nel popup';
+    msg.style.color = '#4ecdc4';
+    setTimeout(()=>msg.textContent='', 5000);
+  }catch(e){
+    msg.textContent = '❌ Errore: ' + e.message;
+    msg.style.color = '#ff6b6b';
+  }
+  btn.disabled = false;
 }
 
 function dlFile(content,filename,type){
