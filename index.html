@@ -33,83 +33,74 @@
       }
     }
 
-    async function assignPrize(token,name,email,testMode=false){
-      // ── Use email as primary key if available, else token ────────────────
-      // Email is more reliable — same person on different browsers = same email
-      const key = email ? 'email_'+email.toLowerCase().replace(/[^a-z0-9]/g,'_') : token;
-
-      // Check if already assigned (skip in test mode)
+    async function assignPrize(token,name,email,testMode=false,forceDayIndex=-1){
+      const emailKey=email?'email_'+email.toLowerCase().replace(/[^a-z0-9]/g,'_'):null;
+      const primaryKey=emailKey||token;
       if(!testMode){
-        const ex=await getDoc(doc(db,"assignments",key));
-        if(ex.exists()) return ex.data();
+        for(const k of [emailKey,token].filter(Boolean)){
+          try{const ex=await getDoc(doc(db,"assignments",k));if(ex.exists()&&!ex.data()._ref)return ex.data();}catch(e){}
+        }
       }
-
-      // ── Get today's day index from fairDates ─────────────────────────────
-      const today=new Date();
-      const todayStr=`${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
-
-      const fdSnap=await getDoc(doc(db,"config","fairDates"));
-      const fairDates=fdSnap.exists()?fdSnap.data().value:[];
-      const dayIndex=fairDates.indexOf(todayStr);
-
-      // ── Use day sequence if available ────────────────────────────────────
+      let dayIndex=forceDayIndex;
+      if(dayIndex<0){
+        const today=new Date();
+        const ts=`${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
+        const fdSnap=await getDoc(doc(db,"config","fairDates"));
+        const fairDates=fdSnap.exists()?fdSnap.data().value:[];
+        dayIndex=fairDates.indexOf(ts);
+      }
       if(dayIndex>=0){
         const seqSnap=await getDoc(doc(db,"sequences","day"+dayIndex));
         if(seqSnap.exists()){
           const daySeq=seqSnap.data().prizes||[];
           if(daySeq.length>0){
+            const today=new Date();
+            const ts=`${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
             const allAsgn=await getDocs(collection(db,"assignments"));
             const countToday=allAsgn.docs.filter(d=>{
               const a=d.data();
-              return a.assignedAt&&a.assignedAt.startsWith(todayStr)&&a.dayIndex===dayIndex;
+              if(a._ref)return false;
+              if(testMode)return a.dayIndex===dayIndex&&a.isTest===true;
+              return a.assignedAt&&a.assignedAt.startsWith(ts)&&a.dayIndex===dayIndex&&!a.isTest;
             }).length;
-
             if(countToday<daySeq.length){
               const prize=daySeq[countToday];
               const code=`EVR-G${dayIndex+1}-${Math.random().toString(36).substring(2,6).toUpperCase()}`;
-              const asgn={
-                id:key,userToken:key,userName:name,userEmail:email||token,
-                prizeId:`day${dayIndex}_pos${countToday}`,
-                prizeName:prize.name,
-                prizeEmoji:prize.emoji||'🎁',
-                prizeDesc:prize.name,
-                prizeColor:'#B22222',
-                code,status:"assigned",
-                assignedAt:new Date().toISOString(),
-                deliveredAt:null,
-                dayIndex,
-                seqPosition:countToday
-              };
-              await setDoc(doc(db,"assignments",key),asgn);
+              const asgn={id:primaryKey,userToken:token,userName:name,userEmail:email||token,deviceToken:token,prizeId:`day${dayIndex}_pos${countToday}`,prizeName:prize.name,prizeEmoji:prize.emoji||'🎁',prizeDesc:prize.name,prizeColor:'#B22222',code,status:"assigned",assignedAt:new Date().toISOString(),deliveredAt:null,dayIndex,seqPosition:countToday,isTest:testMode||false};
+              await setDoc(doc(db,"assignments",primaryKey),asgn);
+              if(token&&token!==primaryKey)await setDoc(doc(db,"assignments",token),{_ref:primaryKey,userEmail:email,deviceToken:token,assignedAt:asgn.assignedAt});
               return asgn;
-            } else {
-              return null;
-            }
+            }else{return null;}
           }
         }
       }
-
-      // ── Fallback: global prizes ───────────────────────────────────────────
       const snap=await getDocs(query(collection(db,"prizes"),orderBy("order")));
       const avail=snap.docs.map(d=>({id:d.id,...d.data()})).find(p=>p.assigned<p.qty);
-      if(!avail) return null;
+      if(!avail)return null;
       const code=`EVR-${avail.id.toUpperCase()}-${Math.random().toString(36).substring(2,6).toUpperCase()}`;
-      const asgn={id:key,userToken:key,userName:name,userEmail:email||token,prizeId:avail.id,prizeName:avail.name,prizeEmoji:avail.emoji,prizeDesc:avail.desc||avail.name,prizeColor:avail.color,code,status:"assigned",assignedAt:new Date().toISOString(),deliveredAt:null};
+      const asgn={id:primaryKey,userToken:token,userName:name,userEmail:email||token,deviceToken:token,prizeId:avail.id,prizeName:avail.name,prizeEmoji:avail.emoji,prizeDesc:avail.desc||avail.name,prizeColor:avail.color,code,status:"assigned",assignedAt:new Date().toISOString(),deliveredAt:null,isTest:testMode||false};
       await runTransaction(db,async tx=>{
-        const pr=doc(db,"prizes",avail.id);
-        const f=await tx.get(pr);
-        if(f.data().assigned>=f.data().qty) throw new Error("exhausted");
-        tx.update(pr,{assigned:f.data().assigned+1});
-        tx.set(doc(db,"assignments",key),asgn);
+        const pr=doc(db,"prizes",avail.id);const f=await tx.get(pr);
+        if(f.data().assigned>=f.data().qty)throw new Error("exhausted");
+        tx.update(pr,{assigned:f.data().assigned+1});tx.set(doc(db,"assignments",primaryKey),asgn);
       });
+      if(token&&token!==primaryKey)await setDoc(doc(db,"assignments",token),{_ref:primaryKey,userEmail:email,deviceToken:token,assignedAt:asgn.assignedAt});
       return asgn;
     }
 
-    // Check if user already played (by email or token)
-    async function checkAlreadyPlayed(token,email){
-      const key = email ? 'email_'+email.toLowerCase().replace(/[^a-z0-9]/g,'_') : token;
-      const ex=await getDoc(doc(db,"assignments",key));
-      return ex.exists() ? ex.data() : null;
+    // Check already played — 3 levels: email, deviceToken, fingerprint
+    async function checkAlreadyPlayed(token, email, fingerprint){
+      const keys=[];
+      if(email) keys.push('email_'+email.toLowerCase().replace(/[^a-z0-9]/g,'_'));
+      if(token) keys.push(token);
+      if(fingerprint) keys.push('fp_'+fingerprint);
+      for(const k of keys){
+        try{
+          const ex=await getDoc(doc(db,"assignments",k));
+          if(ex.exists()) return ex.data();
+        }catch(e){}
+      }
+      return null;
     }
 
     async function markDelivered(token){
@@ -452,6 +443,12 @@
     <div class="wc"><div class="wcl">Come funziona</div>
       <div class="wct">Hai completato la registrazione.<br>Ora <strong>gratta il biglietto</strong> e scopri il tuo premio.<br>Mostra il codice allo staff per ritirarlo subito.</div>
     </div>
+    <!-- Test mode day selector — hidden in production -->
+    <div id="welcome-day-selector" class="hidden" style="width:100%;background:rgba(78,205,196,.06);border:1px solid rgba(78,205,196,.3);padding:16px;margin-bottom:16px">
+      <div style="font-family:var(--fd);font-size:10px;letter-spacing:3px;color:#4ecdc4;text-transform:uppercase;margin-bottom:10px">🧪 Test — Seleziona giorno</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap" id="welcome-day-btns"></div>
+      <div style="font-size:11px;color:#555;margin-top:8px">Seleziona il giorno da simulare prima di giocare</div>
+    </div>
     <button class="cta" onclick="doShowGame()">Scopri il tuo premio →</button>
     <div class="accept-line">Giocando accetti il <a onclick="openRegModal()">regolamento</a></div>
   </div>
@@ -638,6 +635,13 @@
         </button>
       </div>
 
+      <!-- Day selector — shown only when date test mode is ON -->
+      <div id="tm-day-selector" class="hidden" style="padding:14px;background:#0a0a0a;border:1px solid #1a3a1a;border-top:none">
+        <div style="font-family:var(--fd);font-size:10px;letter-spacing:3px;color:#4ecdc4;text-transform:uppercase;margin-bottom:10px">Simula giorno di fiera</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap" id="tm-day-btns"></div>
+        <div style="font-size:11px;color:#555;margin-top:8px">Seleziona il giorno da simulare. Usa la logica reale dei premi.</div>
+      </div>
+
       <div class="adsv" id="test-mode-msg"></div>
     </div>
 
@@ -725,6 +729,7 @@ let cUser=null,cAsgn=null,allAsgn=[],cFlt='all',cSrch='',pendId=null;
 let scanStream=null,scanActive=false,rtUnsub=null,admPrizes=[];
 let testModeReplay=false;  // bypasses already-played block
 let testModeDate=false;    // bypasses date check
+let selectedTestDay=-1;    // -1 = not selected, 0-3 = day index for simulation
 
 const params=new URLSearchParams(window.location.search);
 const uName=params.get('name')||params.get('first_name')||'Ospite';
@@ -738,9 +743,36 @@ let regSequences=[[],[],[],[]];
 let regLocked=false;
 let saveTimer=null;
 
+
+// ── DEVICE FINGERPRINT ────────────────────────────────────────────────────
+function generateFingerprint(){
+  // Try stored fingerprint first (persists across sessions)
+  try{
+    const stored=localStorage.getItem('evora_fp');
+    if(stored) return stored;
+  }catch(e){}
+  // Build from stable browser characteristics
+  const fp=[
+    navigator.language||'',
+    navigator.platform||'',
+    screen.width+'x'+screen.height,
+    screen.colorDepth||'',
+    new Date().getTimezoneOffset(),
+    navigator.hardwareConcurrency||'',
+    navigator.maxTouchPoints||'0',
+    navigator.vendor||''
+  ].join('|');
+  let hash=0;
+  for(let i=0;i<fp.length;i++){hash=((hash<<5)-hash)+fp.charCodeAt(i);hash|=0;}
+  const result='fp_'+Math.abs(hash).toString(36);
+  try{localStorage.setItem('evora_fp',result);}catch(e){}
+  return result;
+}
+
 // ── BOOT ──────────────────────────────────────────────────────────────────
 window.addEventListener('db-ready',async()=>{
-  cUser={token:uToken,name:uName,email:uEmail};
+  const uFingerprint=generateFingerprint();
+  cUser={token:uToken,name:uName,email:uEmail,fingerprint:uFingerprint};
   try{const p=await window.DB.getConfig('passwords');if(p)PWD=p;}catch(e){}
   // Load test mode states
   try{const tm=await window.DB.getConfig('testMode');if(tm&&typeof tm==='object'){testModeReplay=!!tm.replay;testModeDate=!!tm.date;}}catch(e){}
@@ -793,7 +825,13 @@ function show(id,flex=false){const e=document.getElementById(id);e.classList.rem
 function showFooter(){document.getElementById('footer').classList.remove('hidden');}
 function hideFooter(){document.getElementById('footer').classList.add('hidden');}
 
-function showWelcome(){hideAll();stopCamera();if(rtUnsub){rtUnsub();rtUnsub=null;}document.getElementById('uname').textContent=cUser.name;show('pg-welcome');showFooter();}
+function showWelcome(){
+  hideAll();stopCamera();
+  if(rtUnsub){rtUnsub();rtUnsub=null;}
+  document.getElementById('uname').textContent=cUser.name;
+  show('pg-welcome');showFooter();
+  renderWelcomeDaySelector();
+}
 function goHome(){showWelcome();}
 function showLoginStaff(){hideAll();const e=document.getElementById('pg-login-staff');e.classList.remove('hidden');e.style.display='flex';document.getElementById('spwd').value='';document.getElementById('serr').textContent='';showFooter();}
 function showLoginAdmin(){hideAll();const e=document.getElementById('pg-login-admin');e.classList.remove('hidden');e.style.display='flex';document.getElementById('apwd').value='';document.getElementById('aerr').textContent='';showFooter();}
@@ -1009,7 +1047,7 @@ async function doShowGame(){
 
   // ── CHECK IF ALREADY PLAYED (skip if replay test mode on) ────────────────
   if(!testModeReplay){
-    const prev=await window.DB.checkAlreadyPlayed(cUser.token, cUser.email);
+    const prev=await window.DB.checkAlreadyPlayed(cUser.token, cUser.email, cUser.fingerprint);
     if(prev){
       cAsgn=prev;
       showAlreadyPlayed();
@@ -1020,7 +1058,8 @@ async function doShowGame(){
   // ── NORMAL FLOW ───────────────────────────────────────────────────────────
   hideAll(); show('pg-game'); showFooter();
   try{
-    cAsgn=await window.DB.assignPrize(cUser.token,cUser.name,cUser.email,testModeReplay);
+    const dayOverride=testModeDate&&selectedTestDay>=0?selectedTestDay:-1;
+    cAsgn=await window.DB.assignPrize(cUser.token,cUser.name,cUser.email,testModeReplay,dayOverride);
     if(!cAsgn){alert('Tutti i premi sono esauriti per oggi. Grazie per aver partecipato!');showWelcome();return;}
   }catch(e){alert('Errore di connessione. Riprova.');showWelcome();return;}
   document.getElementById('tnum').textContent='#'+cAsgn.id.slice(-6).toUpperCase();
@@ -1029,7 +1068,8 @@ async function doShowGame(){
   document.getElementById('pn').textContent=cAsgn.prizeName;
   document.getElementById('pd').textContent=cAsgn.prizeDesc;
   initScratch();
-  rtUnsub=window.DB.listenAssignment(cUser.token,d=>{if(d.status==='delivered')showTY();});
+  const listenKey=cUser.email?'email_'+cUser.email.toLowerCase().replace(/[^a-z0-9]/g,'_'):cUser.token;
+  rtUnsub=window.DB.listenAssignment(listenKey,d=>{if(d.status==='delivered')showTY();});
 }
 
 // ── ALREADY PLAYED SCREEN ─────────────────────────────────────────────────
@@ -1038,7 +1078,31 @@ function showAlreadyPlayed(){
   const pg=document.getElementById('pg-welcome');
   pg.classList.remove('hidden');
   const a=cAsgn;
-  const qrDiv=`<div id="already-qrc" style="background:white;padding:10px;display:inline-block;margin:12px 0"></div>`;
+
+  // STATUS C — prize already delivered
+  if(a.status==='delivered'){
+    pg.innerHTML=`
+      <div style="text-align:center;width:100%;max-width:420px;animation:fu .5s cubic-bezier(.16,1,.3,1) both">
+        <div style="font-family:var(--fd);font-size:13px;letter-spacing:6px;color:var(--g);text-transform:uppercase;margin-bottom:40px">EVORA <span style="color:var(--red)">●</span> FIERA 2026</div>
+        <div style="font-size:64px;margin-bottom:16px">✅</div>
+        <div style="font-family:var(--fd);font-size:48px;font-weight:800;letter-spacing:2px;text-transform:uppercase;line-height:.95;margin-bottom:12px">
+          PREMIO<span style="display:block;color:var(--red)">RITIRATO</span>
+        </div>
+        <div style="font-family:var(--fs);font-size:18px;color:var(--g);margin-bottom:28px">Hai già ritirato il tuo premio</div>
+        <div style="background:var(--s);border:1px solid var(--b);padding:24px;position:relative;margin-bottom:16px">
+          <div style="position:absolute;top:0;left:0;right:0;height:2px;background:var(--red)"></div>
+          <div style="font-size:14px;color:#aaa;line-height:1.7">
+            Il premio <strong style="color:var(--w)">${a.prizeEmoji} ${a.prizeName}</strong> è stato consegnato il
+            <strong style="color:var(--w)">${a.deliveredAt?new Date(a.deliveredAt).toLocaleDateString('it-IT'):'-'}</strong>.<br><br>
+            Grazie per aver partecipato al concorso Evora!
+          </div>
+        </div>
+        <div style="font-family:var(--fd);font-size:11px;letter-spacing:3px;color:#444;text-transform:uppercase">EVORA · FIERA 2026</div>
+      </div>`;
+    return;
+  }
+
+  // STATUS B — assigned but not yet delivered — show prize + QR
   pg.innerHTML=`
     <div style="text-align:center;width:100%;max-width:420px;animation:fu .5s cubic-bezier(.16,1,.3,1) both">
       <div style="font-family:var(--fd);font-size:13px;letter-spacing:6px;color:var(--g);text-transform:uppercase;margin-bottom:32px">EVORA <span style="color:var(--red)">●</span> FIERA 2026</div>
@@ -1049,21 +1113,23 @@ function showAlreadyPlayed(){
       <div style="font-family:var(--fs);font-size:18px;color:var(--g);margin-bottom:24px">Il tuo premio è già stato assegnato</div>
       <div style="background:var(--s);border:1px solid var(--b);padding:24px;position:relative;margin-bottom:16px;text-align:left">
         <div style="position:absolute;top:0;left:0;right:0;height:3px;background:var(--red)"></div>
-        <div style="font-size:13px;color:var(--g);margin-bottom:16px">Il tuo premio:</div>
+        <div style="font-size:13px;color:var(--g);margin-bottom:12px">Il tuo premio:</div>
         <div style="font-family:var(--fd);font-size:32px;font-weight:800;letter-spacing:1px;margin-bottom:4px">${a.prizeName}</div>
         <div style="font-size:13px;color:var(--g);margin-bottom:20px">${a.prizeDesc||''}</div>
         <div style="font-family:var(--fd);font-size:10px;letter-spacing:4px;color:var(--g);text-transform:uppercase;margin-bottom:6px">Codice Premio</div>
         <div style="font-family:var(--fd);font-size:22px;letter-spacing:4px;background:var(--s2);border:1px solid var(--b);padding:12px 16px;margin-bottom:16px">${a.code}</div>
-        <div style="text-align:center">${qrDiv}</div>
+        <div style="text-align:center"><div id="already-qrc" style="background:white;padding:10px;display:inline-block;margin:8px 0"></div></div>
         <div style="font-size:12px;color:#555;text-align:center;margin-top:8px">Mostra il QR allo staff per ritirare il tuo premio</div>
       </div>
       <div style="font-family:var(--fd);font-size:11px;letter-spacing:3px;color:#444;text-transform:uppercase">Ogni persona può partecipare una sola volta</div>
     </div>`;
-  // Generate QR after DOM is ready
   setTimeout(()=>{
     const qrEl=document.getElementById('already-qrc');
     if(qrEl&&window.QRCode) new QRCode(qrEl,{text:a.code,width:130,height:130,colorDark:'#0a0a0a',colorLight:'#ffffff'});
   },100);
+  // Listen for delivery in realtime
+  const listenKey=cUser.email?'email_'+cUser.email.toLowerCase().replace(/[^a-z0-9]/g,'_'):cUser.token;
+  if(!rtUnsub) rtUnsub=window.DB.listenAssignment(listenKey,d=>{if(d.status==='delivered'){cAsgn=d;showAlreadyPlayed();}});
 }
 
 // ── TEST MODE ─────────────────────────────────────────────────────────────
@@ -1083,6 +1149,7 @@ function applyTestModeBanner(){
     banner.classList.add('hidden');
     document.getElementById('app').style.paddingTop='';
   }
+  renderWelcomeDaySelector();
 }
 
 async function saveTestMode(){
@@ -1104,15 +1171,55 @@ async function toggleTestReplay(){
 
 async function toggleTestDate(){
   testModeDate=!testModeDate;
+  if(!testModeDate) selectedTestDay=-1; // reset day selection when disabling
   try{
     await saveTestMode();
     updateTestModeUI();
     applyTestModeBanner();
     const msg=document.getElementById('test-mode-msg');
-    msg.textContent=testModeDate?'✓ Date bypassate — il gioco funziona in qualsiasi data':'✓ Blocco date attivo — il gioco funziona solo nelle date configurate';
+    msg.textContent=testModeDate?'✓ Date bypassate — seleziona il giorno da simulare':'✓ Blocco date attivo — il gioco funziona solo nelle date configurate';
     msg.style.color=testModeDate?'#4ecdc4':'#aaa';
     setTimeout(()=>msg.textContent='',3000);
   }catch(e){testModeDate=!testModeDate;}
+}
+
+function renderDayButtons(){
+  const container=document.getElementById('tm-day-btns');
+  if(!container) return;
+  // Use regDays dates if available
+  const days=regDays.map((d,i)=>({label:`G.${i+1}${d.date?' — '+fmtDate(d.date).slice(0,6):''}`,index:i}));
+  container.innerHTML=days.map(d=>`
+    <button onclick="selectTestDay(${d.index})" id="tm-day-${d.index}"
+      style="padding:8px 14px;border:2px solid ${selectedTestDay===d.index?'#4ecdc4':'var(--b)'};background:${selectedTestDay===d.index?'#4ecdc4':'transparent'};color:${selectedTestDay===d.index?'#0a0a0a':'var(--g)'};font-family:var(--fd);font-size:13px;letter-spacing:1px;cursor:pointer;transition:all .15s;border-radius:2px;font-weight:700">
+      ${d.label}
+    </button>`).join('');
+}
+
+function renderWelcomeDaySelector(){
+  const wrap=document.getElementById('welcome-day-selector');
+  if(!wrap) return;
+  if(!testModeDate){wrap.classList.add('hidden');return;}
+  wrap.classList.remove('hidden');
+  const container=document.getElementById('welcome-day-btns');
+  if(!container) return;
+  const days=regDays.map((d,i)=>({label:`Giorno ${i+1}${d.date?' — '+fmtDate(d.date):''}`,index:i}));
+  container.innerHTML=days.map(d=>`
+    <button onclick="selectTestDay(${d.index})" id="wday-${d.index}"
+      style="padding:8px 14px;border:2px solid ${selectedTestDay===d.index?'#4ecdc4':'rgba(78,205,196,.3)'};background:${selectedTestDay===d.index?'#4ecdc4':'transparent'};color:${selectedTestDay===d.index?'#0a0a0a':'#4ecdc4'};font-family:var(--fd);font-size:13px;letter-spacing:1px;cursor:pointer;transition:all .15s;border-radius:2px;font-weight:700">
+      ${d.label}
+    </button>`).join('');
+}
+
+function selectTestDay(idx){
+  selectedTestDay=idx;
+  renderDayButtons();       // admin selector
+  renderWelcomeDaySelector(); // welcome page selector
+  const msg=document.getElementById('test-mode-msg');
+  if(msg){
+    msg.textContent=`✓ Simula Giorno ${idx+1}${regDays[idx]?.date?' ('+fmtDate(regDays[idx].date)+')':''}`;
+    msg.style.color='#4ecdc4';
+    setTimeout(()=>msg.textContent='',3000);
+  }
 }
 
 function updateTestModeUI(){
@@ -1144,6 +1251,16 @@ function updateTestModeUI(){
       db2.textContent='BYPASSA'; db2.style.background='var(--b)'; db2.style.color='var(--g)'; db2.style.borderColor='var(--b)';
       dl.textContent='DATE: ATTIVO'; dl.style.color='var(--w)';
       ds.textContent='Il gioco funziona solo nelle date configurate'; ds.style.color='var(--g)';
+    }
+  }
+  // Day selector — visible only when date test mode ON
+  const daySel=document.getElementById('tm-day-selector');
+  if(daySel){
+    if(testModeDate){
+      daySel.classList.remove('hidden');
+      renderDayButtons();
+    } else {
+      daySel.classList.add('hidden');
     }
   }
 }
