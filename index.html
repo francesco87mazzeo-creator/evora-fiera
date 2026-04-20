@@ -1243,20 +1243,8 @@ function renderDayButtons(){
     </button>`).join('');
 }
 
-function renderWelcomeDaySelector(){ return; // day selector is admin-only now
-  const wrap=document.getElementById('welcome-day-selector');
-  if(!wrap) return;
-  if(!testModeDate){wrap.classList.add('hidden');return;}
-  wrap.classList.remove('hidden');
-  const container=document.getElementById('welcome-day-btns');
-  if(!container) return;
-  const days=regDays.map((d,i)=>({label:`Giorno ${i+1}${d.date?' — '+fmtDate(d.date):''}`,index:i}));
-  container.innerHTML=days.map(d=>`
-    <button onclick="selectTestDay(${d.index})" id="wday-${d.index}"
-      style="padding:8px 14px;border:2px solid ${selectedTestDay===d.index?'#4ecdc4':'rgba(78,205,196,.3)'};background:${selectedTestDay===d.index?'#4ecdc4':'transparent'};color:${selectedTestDay===d.index?'#0a0a0a':'#4ecdc4'};font-family:var(--fd);font-size:13px;letter-spacing:1px;cursor:pointer;transition:all .15s;border-radius:2px;font-weight:700">
-      ${d.label}
-    </button>`).join('');
-}
+function renderWelcomeDaySelector(){} // no-op — day selector is admin-only
+
 
 function selectTestDay(idx){
   selectedTestDay=idx;
@@ -1565,12 +1553,7 @@ function confirmReset(){
         regLocked=false;
         admPrizes=[];
         savedRegData={company:{name:'Evora',city:'',vat:''},event:{name:'Evora Fiera 2026',venue:'evento fieristico'}};
-        // Clear uploaded regulation
-        uploadedRegulationContent=null;
-        document.getElementById('upload-reg-filename').textContent='Nessun file selezionato';
-        const uploadBtn=document.getElementById('upload-reg-btn');
-        if(uploadBtn){uploadBtn.style.opacity='.4';uploadBtn.style.pointerEvents='none';}
-        document.getElementById('upload-reg-input').value='';
+        // Clear uploaded regulation (upload UI removed — auto-published now)
         // Reset test mode
         testModeReplay=false;
         testModeDate=false;
