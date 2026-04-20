@@ -33,10 +33,16 @@
       }
     }
 
-    async function assignPrize(token,name,email){
-      // Check if already assigned
-      const ex=await getDoc(doc(db,"assignments",token));
-      if(ex.exists()) return ex.data();
+    async function assignPrize(token,name,email,testMode=false){
+      // ── Use email as primary key if available, else token ────────────────
+      // Email is more reliable — same person on different browsers = same email
+      const key = email ? 'email_'+email.toLowerCase().replace(/[^a-z0-9]/g,'_') : token;
+
+      // Check if already assigned (skip in test mode)
+      if(!testMode){
+        const ex=await getDoc(doc(db,"assignments",key));
+        if(ex.exists()) return ex.data();
+      }
 
       // ── Get today's day index from fairDates ─────────────────────────────
       const today=new Date();
@@ -44,33 +50,29 @@
 
       const fdSnap=await getDoc(doc(db,"config","fairDates"));
       const fairDates=fdSnap.exists()?fdSnap.data().value:[];
-      const dayIndex=fairDates.indexOf(todayStr); // -1 if not found
+      const dayIndex=fairDates.indexOf(todayStr);
 
-      // ── Try to use day sequence if available ─────────────────────────────
+      // ── Use day sequence if available ────────────────────────────────────
       if(dayIndex>=0){
-        const regSnap=await getDoc(doc(db,"config","regulation"));
-        if(regSnap.exists()){
-          const reg=regSnap.data().value;
-          const daySeq=reg.regSequences&&reg.regSequences[dayIndex];
-          if(daySeq&&daySeq.length>0){
-            // Count how many prizes already assigned TODAY from this day's sequence
-            // We query all assignments and filter by date client-side to avoid Firestore composite index
+        const seqSnap=await getDoc(doc(db,"sequences","day"+dayIndex));
+        if(seqSnap.exists()){
+          const daySeq=seqSnap.data().prizes||[];
+          if(daySeq.length>0){
             const allAsgn=await getDocs(collection(db,"assignments"));
             const countToday=allAsgn.docs.filter(d=>{
               const a=d.data();
               return a.assignedAt&&a.assignedAt.startsWith(todayStr)&&a.dayIndex===dayIndex;
             }).length;
 
-            // Get next prize in sequence for today
             if(countToday<daySeq.length){
               const prize=daySeq[countToday];
               const code=`EVR-G${dayIndex+1}-${Math.random().toString(36).substring(2,6).toUpperCase()}`;
               const asgn={
-                id:token,userToken:token,userName:name,userEmail:email,
+                id:key,userToken:key,userName:name,userEmail:email||token,
                 prizeId:`day${dayIndex}_pos${countToday}`,
                 prizeName:prize.name,
                 prizeEmoji:prize.emoji||'🎁',
-                prizeDesc:prize.desc||prize.name,
+                prizeDesc:prize.name,
                 prizeColor:'#B22222',
                 code,status:"assigned",
                 assignedAt:new Date().toISOString(),
@@ -78,29 +80,36 @@
                 dayIndex,
                 seqPosition:countToday
               };
-              await setDoc(doc(db,"assignments",token),asgn);
+              await setDoc(doc(db,"assignments",key),asgn);
               return asgn;
             } else {
-              return null; // All prizes for today exhausted
+              return null;
             }
           }
         }
       }
 
-      // ── Fallback: use global prizes list (if no sequence configured) ─────
+      // ── Fallback: global prizes ───────────────────────────────────────────
       const snap=await getDocs(query(collection(db,"prizes"),orderBy("order")));
       const avail=snap.docs.map(d=>({id:d.id,...d.data()})).find(p=>p.assigned<p.qty);
       if(!avail) return null;
       const code=`EVR-${avail.id.toUpperCase()}-${Math.random().toString(36).substring(2,6).toUpperCase()}`;
-      const asgn={id:token,userToken:token,userName:name,userEmail:email,prizeId:avail.id,prizeName:avail.name,prizeEmoji:avail.emoji,prizeDesc:avail.desc||avail.name,prizeColor:avail.color,code,status:"assigned",assignedAt:new Date().toISOString(),deliveredAt:null};
+      const asgn={id:key,userToken:key,userName:name,userEmail:email||token,prizeId:avail.id,prizeName:avail.name,prizeEmoji:avail.emoji,prizeDesc:avail.desc||avail.name,prizeColor:avail.color,code,status:"assigned",assignedAt:new Date().toISOString(),deliveredAt:null};
       await runTransaction(db,async tx=>{
         const pr=doc(db,"prizes",avail.id);
         const f=await tx.get(pr);
         if(f.data().assigned>=f.data().qty) throw new Error("exhausted");
         tx.update(pr,{assigned:f.data().assigned+1});
-        tx.set(doc(db,"assignments",token),asgn);
+        tx.set(doc(db,"assignments",key),asgn);
       });
       return asgn;
+    }
+
+    // Check if user already played (by email or token)
+    async function checkAlreadyPlayed(token,email){
+      const key = email ? 'email_'+email.toLowerCase().replace(/[^a-z0-9]/g,'_') : token;
+      const ex=await getDoc(doc(db,"assignments",key));
+      return ex.exists() ? ex.data() : null;
     }
 
     async function markDelivered(token){
@@ -145,6 +154,11 @@
       await setDoc(doc(db,"config",key),{value:val});
     }
 
+    // Save a single day's sequence as its own document: sequences/day0, day1, etc.
+    async function saveDaySequence(dayIndex, prizes){
+      await setDoc(doc(db,"sequences","day"+dayIndex),{prizes, savedAt:new Date().toISOString()});
+    }
+
     // ── RESET: full tabula rasa ───────────────────────────────────────────
     async function resetAll(){
       // 1. Delete all assignments
@@ -159,9 +173,15 @@
       try{await deleteDoc(doc(db,"config","regulation_html"));}catch(e){}
       // 5. Delete fair dates
       try{await deleteDoc(doc(db,"config","fairDates"));}catch(e){}
+      // 6. Delete day sequences
+      for(let i=0;i<4;i++){
+        try{await deleteDoc(doc(db,"sequences","day"+i));}catch(e){}
+      }
+      // 7. Reset test mode
+      try{await deleteDoc(doc(db,"config","testMode"));}catch(e){}
     }
 
-    window.DB={initPrizes,assignPrize,markDelivered,getAllAssignments,findByCode,getPrizes,savePrizes,listenAssignment,getConfig,saveConfig,resetAll};
+    window.DB={initPrizes,assignPrize,checkAlreadyPlayed,markDelivered,getAllAssignments,findByCode,getPrizes,savePrizes,listenAssignment,getConfig,saveConfig,resetAll,saveDaySequence};
     await initPrizes();
     window.dispatchEvent(new Event("db-ready"));
   </script>
@@ -418,6 +438,12 @@
 
 <div id="app" style="display:none;padding-bottom:52px">
 
+  <!-- TEST MODE BANNER -->
+  <div id="test-banner" class="hidden" style="position:fixed;top:0;left:0;right:0;z-index:60;background:#1a3a1a;border-bottom:2px solid #4ecdc4;padding:8px 16px;display:flex;align-items:center;justify-content:center;gap:8px">
+    <span style="font-size:14px">🧪</span>
+    <span style="font-family:var(--fd);font-size:12px;letter-spacing:2px;color:#4ecdc4;text-transform:uppercase">Modalità Test Attiva — Il blocco rigioco è disabilitato</span>
+  </div>
+
   <!-- WELCOME -->
   <div id="pg-welcome" class="page hidden">
     <div class="wl">EVORA <span>●</span> FIERA 2026</div>
@@ -583,6 +609,23 @@
       <div class="adsv" id="reset-msg"></div>
     </div>
 
+    <!-- TEST MODE -->
+    <div class="ads" style="border-color:#1a2a1a">
+      <div class="adst" style="color:#4ecdc4">🧪 MODALITÀ TEST</div>
+      <div class="adss">Quando attiva: bypassa il blocco "hai già giocato" e il blocco date. Usala per testare il gioco dallo stesso telefono più volte. <strong style="color:var(--w)">Disattivala sempre prima della fiera.</strong></div>
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:16px;background:#0a0a0a;border:1px solid var(--b)">
+        <div>
+          <div style="font-family:var(--fd);font-size:16px;font-weight:700;letter-spacing:2px" id="test-mode-label">TEST MODE: OFF</div>
+          <div style="font-size:12px;color:var(--g);margin-top:4px" id="test-mode-sub">Il gioco blocca chi tenta di rigiocare</div>
+        </div>
+        <button id="test-mode-btn" onclick="toggleTestMode()"
+          style="padding:12px 24px;background:var(--b);color:var(--g);border:2px solid var(--b);font-family:var(--fd);font-size:14px;letter-spacing:2px;cursor:pointer;transition:all .2s;border-radius:2px;font-weight:700">
+          ATTIVA
+        </button>
+      </div>
+      <div class="adsv" id="test-mode-msg"></div>
+    </div>
+
     <!-- REGULATION -->
     <div class="ads">
       <div class="adst">REGOLAMENTO</div>
@@ -665,6 +708,7 @@
 let PWD={staff:'staff',admin:'admin'};
 let cUser=null,cAsgn=null,allAsgn=[],cFlt='all',cSrch='',pendId=null;
 let scanStream=null,scanActive=false,rtUnsub=null,admPrizes=[];
+let testModeActive=false; // loaded from Firebase
 
 const params=new URLSearchParams(window.location.search);
 const uName=params.get('name')||params.get('first_name')||'Ospite';
@@ -682,6 +726,9 @@ let saveTimer=null;
 window.addEventListener('db-ready',async()=>{
   cUser={token:uToken,name:uName,email:uEmail};
   try{const p=await window.DB.getConfig('passwords');if(p)PWD=p;}catch(e){}
+  // Load test mode state
+  try{const tm=await window.DB.getConfig('testMode');if(tm!==null)testModeActive=!!tm;}catch(e){}
+  applyTestModeBanner();
   // Load saved regulation for modal use
   try{
     const reg=await window.DB.getConfig('regulation');
@@ -944,10 +991,21 @@ async function doShowGame(){
     return;
   }
 
+  // ── CHECK IF ALREADY PLAYED (skip in test mode) ───────────────────────
+  if(!testModeActive){
+    const prev=await window.DB.checkAlreadyPlayed(cUser.token, cUser.email);
+    if(prev){
+      // Show their existing prize instead of letting them play again
+      cAsgn=prev;
+      showAlreadyPlayed();
+      return;
+    }
+  }
+
   // ── NORMAL FLOW ───────────────────────────────────────────────────────────
   hideAll(); show('pg-game'); showFooter();
   try{
-    cAsgn=await window.DB.assignPrize(cUser.token,cUser.name,cUser.email);
+    cAsgn=await window.DB.assignPrize(cUser.token,cUser.name,cUser.email,testModeActive);
     if(!cAsgn){alert('Tutti i premi sono esauriti per oggi. Grazie per aver partecipato!');showWelcome();return;}
   }catch(e){alert('Errore di connessione. Riprova.');showWelcome();return;}
   document.getElementById('tnum').textContent='#'+cAsgn.id.slice(-6).toUpperCase();
@@ -957,6 +1015,94 @@ async function doShowGame(){
   document.getElementById('pd').textContent=cAsgn.prizeDesc;
   initScratch();
   rtUnsub=window.DB.listenAssignment(cUser.token,d=>{if(d.status==='delivered')showTY();});
+}
+
+// ── ALREADY PLAYED SCREEN ─────────────────────────────────────────────────
+function showAlreadyPlayed(){
+  hideAll();showFooter();
+  const pg=document.getElementById('pg-welcome');
+  pg.classList.remove('hidden');
+  const a=cAsgn;
+  const qrDiv=`<div id="already-qrc" style="background:white;padding:10px;display:inline-block;margin:12px 0"></div>`;
+  pg.innerHTML=`
+    <div style="text-align:center;width:100%;max-width:420px;animation:fu .5s cubic-bezier(.16,1,.3,1) both">
+      <div style="font-family:var(--fd);font-size:13px;letter-spacing:6px;color:var(--g);text-transform:uppercase;margin-bottom:32px">EVORA <span style="color:var(--red)">●</span> FIERA 2026</div>
+      <div style="font-size:52px;margin-bottom:12px">${a.prizeEmoji}</div>
+      <div style="font-family:var(--fd);font-size:42px;font-weight:800;letter-spacing:2px;text-transform:uppercase;margin-bottom:8px">
+        HAI GIÀ<span style="display:block;color:var(--red)">GIOCATO</span>
+      </div>
+      <div style="font-family:var(--fs);font-size:18px;color:var(--g);margin-bottom:24px">Il tuo premio è già stato assegnato</div>
+      <div style="background:var(--s);border:1px solid var(--b);padding:24px;position:relative;margin-bottom:16px;text-align:left">
+        <div style="position:absolute;top:0;left:0;right:0;height:3px;background:var(--red)"></div>
+        <div style="font-size:13px;color:var(--g);margin-bottom:16px">Il tuo premio:</div>
+        <div style="font-family:var(--fd);font-size:32px;font-weight:800;letter-spacing:1px;margin-bottom:4px">${a.prizeName}</div>
+        <div style="font-size:13px;color:var(--g);margin-bottom:20px">${a.prizeDesc||''}</div>
+        <div style="font-family:var(--fd);font-size:10px;letter-spacing:4px;color:var(--g);text-transform:uppercase;margin-bottom:6px">Codice Premio</div>
+        <div style="font-family:var(--fd);font-size:22px;letter-spacing:4px;background:var(--s2);border:1px solid var(--b);padding:12px 16px;margin-bottom:16px">${a.code}</div>
+        <div style="text-align:center">${qrDiv}</div>
+        <div style="font-size:12px;color:#555;text-align:center;margin-top:8px">Mostra il QR allo staff per ritirare il tuo premio</div>
+      </div>
+      <div style="font-family:var(--fd);font-size:11px;letter-spacing:3px;color:#444;text-transform:uppercase">Ogni persona può partecipare una sola volta</div>
+    </div>`;
+  // Generate QR after DOM is ready
+  setTimeout(()=>{
+    const qrEl=document.getElementById('already-qrc');
+    if(qrEl&&window.QRCode) new QRCode(qrEl,{text:a.code,width:130,height:130,colorDark:'#0a0a0a',colorLight:'#ffffff'});
+  },100);
+}
+
+// ── TEST MODE ─────────────────────────────────────────────────────────────
+function applyTestModeBanner(){
+  const banner=document.getElementById('test-banner');
+  if(!banner) return;
+  if(testModeActive){
+    banner.classList.remove('hidden');
+    document.getElementById('app').style.paddingTop='44px';
+  } else {
+    banner.classList.add('hidden');
+    document.getElementById('app').style.paddingTop='';
+  }
+}
+
+async function toggleTestMode(){
+  testModeActive=!testModeActive;
+  try{
+    await window.DB.saveConfig('testMode', testModeActive);
+    updateTestModeUI();
+    applyTestModeBanner();
+    const msg=document.getElementById('test-mode-msg');
+    msg.textContent=testModeActive?'✓ Test mode attiva — il blocco rigioco è disabilitato':'✓ Test mode disattivata — il blocco rigioco è attivo';
+    msg.style.color=testModeActive?'#4ecdc4':'#aaa';
+    setTimeout(()=>msg.textContent='',3000);
+  }catch(e){
+    testModeActive=!testModeActive; // revert
+  }
+}
+
+function updateTestModeUI(){
+  const btn=document.getElementById('test-mode-btn');
+  const lbl=document.getElementById('test-mode-label');
+  const sub=document.getElementById('test-mode-sub');
+  if(!btn) return;
+  if(testModeActive){
+    btn.textContent='DISATTIVA';
+    btn.style.background='#4ecdc4';
+    btn.style.color='#0a0a0a';
+    btn.style.borderColor='#4ecdc4';
+    lbl.textContent='TEST MODE: ON';
+    lbl.style.color='#4ecdc4';
+    sub.textContent='⚠ Il blocco rigioco è disabilitato — disattiva prima della fiera!';
+    sub.style.color='#ff6b6b';
+  } else {
+    btn.textContent='ATTIVA';
+    btn.style.background='var(--b)';
+    btn.style.color='var(--g)';
+    btn.style.borderColor='var(--b)';
+    lbl.textContent='TEST MODE: OFF';
+    lbl.style.color='var(--w)';
+    sub.textContent='Il gioco blocca chi tenta di rigiocare';
+    sub.style.color='var(--g)';
+  }
 }
 
 function showResult(){
@@ -1143,6 +1289,7 @@ async function showAdminPage(){
   await loadPrizes();
   await loadRegulationConfig();
   await loadStats();
+  updateTestModeUI(); // reflect current test mode state
 }
 async function loadPrizes(){try{admPrizes=await window.DB.getPrizes();renderPCfg();}catch(e){}}
 function renderPCfg(){
@@ -1217,6 +1364,10 @@ function confirmReset(){
         const uploadBtn=document.getElementById('upload-reg-btn');
         if(uploadBtn){uploadBtn.style.opacity='.4';uploadBtn.style.pointerEvents='none';}
         document.getElementById('upload-reg-input').value='';
+        // Reset test mode
+        testModeActive=false;
+        updateTestModeUI();
+        applyTestModeBanner();
 
         // ── Reset Admin UI ─────────────────────────────────────────────────
         // Prizes section
@@ -1395,14 +1546,22 @@ async function generateRegulation(){
   regLocked=true;
   renderRegOutput();
   document.getElementById('reg-output').classList.remove('hidden');
-  document.getElementById('reg-msg').textContent='✓ Sequenze generate e salvate';
-  setTimeout(()=>document.getElementById('reg-msg').textContent='',3000);
+  document.getElementById('reg-msg').textContent='Salvataggio in corso…';
   buildRegulationModalText();
   await saveRegulationConfig();
 
-  // ── Save fair dates separately for fast lookup ─────────────────────────
+  // ── Save fair dates for fast date check ───────────────────────────────
   const fairDates=regDays.map(d=>d.date).filter(Boolean);
   await window.DB.saveConfig('fairDates', fairDates);
+
+  // ── Save each day sequence as a SEPARATE Firebase document ────────────
+  // This avoids the 1MB Firestore document size limit
+  for(let i=0;i<regSequences.length;i++){
+    await window.DB.saveDaySequence(i, regSequences[i]);
+  }
+
+  document.getElementById('reg-msg').textContent='✓ Sequenze generate e salvate su Firebase';
+  setTimeout(()=>document.getElementById('reg-msg').textContent='',4000);
 }
 
 function renderRegOutput(){
