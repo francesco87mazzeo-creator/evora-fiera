@@ -441,7 +441,7 @@
   <!-- TEST MODE BANNER -->
   <div id="test-banner" class="hidden" style="position:fixed;top:0;left:0;right:0;z-index:60;background:#1a3a1a;border-bottom:2px solid #4ecdc4;padding:8px 16px;display:flex;align-items:center;justify-content:center;gap:8px">
     <span style="font-size:14px">🧪</span>
-    <span style="font-family:var(--fd);font-size:12px;letter-spacing:2px;color:#4ecdc4;text-transform:uppercase">Modalità Test Attiva — Il blocco rigioco è disabilitato</span>
+    <span id="test-banner-txt" style="font-family:var(--fd);font-size:12px;letter-spacing:2px;color:#4ecdc4;text-transform:uppercase">Modalità Test Attiva</span>
   </div>
 
   <!-- WELCOME -->
@@ -612,17 +612,32 @@
     <!-- TEST MODE -->
     <div class="ads" style="border-color:#1a2a1a">
       <div class="adst" style="color:#4ecdc4">🧪 MODALITÀ TEST</div>
-      <div class="adss">Quando attiva: bypassa il blocco "hai già giocato" e il blocco date. Usala per testare il gioco dallo stesso telefono più volte. <strong style="color:var(--w)">Disattivala sempre prima della fiera.</strong></div>
-      <div style="display:flex;align-items:center;justify-content:space-between;padding:16px;background:#0a0a0a;border:1px solid var(--b)">
-        <div>
-          <div style="font-family:var(--fd);font-size:16px;font-weight:700;letter-spacing:2px" id="test-mode-label">TEST MODE: OFF</div>
-          <div style="font-size:12px;color:var(--g);margin-top:4px" id="test-mode-sub">Il gioco blocca chi tenta di rigiocare</div>
+      <div class="adss">Usa queste opzioni per testare il gioco. <strong style="color:var(--w)">Disattiva tutto prima della fiera.</strong></div>
+
+      <!-- Toggle 1: Replay -->
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:14px;background:#0a0a0a;border:1px solid var(--b);margin-bottom:10px">
+        <div style="flex:1;min-width:0;margin-right:12px">
+          <div style="font-family:var(--fd);font-size:14px;font-weight:700;letter-spacing:2px" id="tm-replay-label">RIGIOCO: BLOCCATO</div>
+          <div style="font-size:12px;color:var(--g);margin-top:3px" id="tm-replay-sub">Lo stesso contatto non può rigiocare</div>
         </div>
-        <button id="test-mode-btn" onclick="toggleTestMode()"
-          style="padding:12px 24px;background:var(--b);color:var(--g);border:2px solid var(--b);font-family:var(--fd);font-size:14px;letter-spacing:2px;cursor:pointer;transition:all .2s;border-radius:2px;font-weight:700">
-          ATTIVA
+        <button id="tm-replay-btn" onclick="toggleTestReplay()"
+          style="padding:10px 18px;background:var(--b);color:var(--g);border:2px solid var(--b);font-family:var(--fd);font-size:13px;letter-spacing:2px;cursor:pointer;transition:all .2s;border-radius:2px;font-weight:700;white-space:nowrap;flex-shrink:0">
+          SBLOCCA
         </button>
       </div>
+
+      <!-- Toggle 2: Date -->
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:14px;background:#0a0a0a;border:1px solid var(--b)">
+        <div style="flex:1;min-width:0;margin-right:12px">
+          <div style="font-family:var(--fd);font-size:14px;font-weight:700;letter-spacing:2px" id="tm-date-label">DATE: ATTIVO</div>
+          <div style="font-size:12px;color:var(--g);margin-top:3px" id="tm-date-sub">Il gioco funziona solo nelle date configurate</div>
+        </div>
+        <button id="tm-date-btn" onclick="toggleTestDate()"
+          style="padding:10px 18px;background:var(--b);color:var(--g);border:2px solid var(--b);font-family:var(--fd);font-size:13px;letter-spacing:2px;cursor:pointer;transition:all .2s;border-radius:2px;font-weight:700;white-space:nowrap;flex-shrink:0">
+          BYPASSA
+        </button>
+      </div>
+
       <div class="adsv" id="test-mode-msg"></div>
     </div>
 
@@ -708,7 +723,8 @@
 let PWD={staff:'staff',admin:'admin'};
 let cUser=null,cAsgn=null,allAsgn=[],cFlt='all',cSrch='',pendId=null;
 let scanStream=null,scanActive=false,rtUnsub=null,admPrizes=[];
-let testModeActive=false; // loaded from Firebase
+let testModeReplay=false;  // bypasses already-played block
+let testModeDate=false;    // bypasses date check
 
 const params=new URLSearchParams(window.location.search);
 const uName=params.get('name')||params.get('first_name')||'Ospite';
@@ -726,8 +742,8 @@ let saveTimer=null;
 window.addEventListener('db-ready',async()=>{
   cUser={token:uToken,name:uName,email:uEmail};
   try{const p=await window.DB.getConfig('passwords');if(p)PWD=p;}catch(e){}
-  // Load test mode state
-  try{const tm=await window.DB.getConfig('testMode');if(tm!==null)testModeActive=!!tm;}catch(e){}
+  // Load test mode states
+  try{const tm=await window.DB.getConfig('testMode');if(tm&&typeof tm==='object'){testModeReplay=!!tm.replay;testModeDate=!!tm.date;}}catch(e){}
   applyTestModeBanner();
   // Load saved regulation for modal use
   try{
@@ -961,7 +977,7 @@ async function doShowGame(){
 
   // ── DATE CHECK ────────────────────────────────────────────────────────────
   const today=todayStr();
-  const dateOk = fairDates.length===0 || fairDates.includes(today);
+  const dateOk = testModeDate || fairDates.length===0 || fairDates.includes(today);
 
   if(!dateOk){
     const months=['','gennaio','febbraio','marzo','aprile','maggio','giugno','luglio','agosto','settembre','ottobre','novembre','dicembre'];
@@ -991,11 +1007,10 @@ async function doShowGame(){
     return;
   }
 
-  // ── CHECK IF ALREADY PLAYED (skip in test mode) ───────────────────────
-  if(!testModeActive){
+  // ── CHECK IF ALREADY PLAYED (skip if replay test mode on) ────────────────
+  if(!testModeReplay){
     const prev=await window.DB.checkAlreadyPlayed(cUser.token, cUser.email);
     if(prev){
-      // Show their existing prize instead of letting them play again
       cAsgn=prev;
       showAlreadyPlayed();
       return;
@@ -1005,7 +1020,7 @@ async function doShowGame(){
   // ── NORMAL FLOW ───────────────────────────────────────────────────────────
   hideAll(); show('pg-game'); showFooter();
   try{
-    cAsgn=await window.DB.assignPrize(cUser.token,cUser.name,cUser.email,testModeActive);
+    cAsgn=await window.DB.assignPrize(cUser.token,cUser.name,cUser.email,testModeReplay);
     if(!cAsgn){alert('Tutti i premi sono esauriti per oggi. Grazie per aver partecipato!');showWelcome();return;}
   }catch(e){alert('Errore di connessione. Riprova.');showWelcome();return;}
   document.getElementById('tnum').textContent='#'+cAsgn.id.slice(-6).toUpperCase();
@@ -1055,53 +1070,81 @@ function showAlreadyPlayed(){
 function applyTestModeBanner(){
   const banner=document.getElementById('test-banner');
   if(!banner) return;
-  if(testModeActive){
+  const anyActive=testModeReplay||testModeDate;
+  if(anyActive){
     banner.classList.remove('hidden');
     document.getElementById('app').style.paddingTop='44px';
+    const parts=[];
+    if(testModeReplay) parts.push('Rigioco sbloccato');
+    if(testModeDate) parts.push('Date bypassate');
+    const txt=document.getElementById('test-banner-txt');
+    if(txt) txt.textContent='🧪 TEST: '+parts.join(' · ');
   } else {
     banner.classList.add('hidden');
     document.getElementById('app').style.paddingTop='';
   }
 }
 
-async function toggleTestMode(){
-  testModeActive=!testModeActive;
+async function saveTestMode(){
+  await window.DB.saveConfig('testMode',{replay:testModeReplay,date:testModeDate});
+}
+
+async function toggleTestReplay(){
+  testModeReplay=!testModeReplay;
   try{
-    await window.DB.saveConfig('testMode', testModeActive);
+    await saveTestMode();
     updateTestModeUI();
     applyTestModeBanner();
     const msg=document.getElementById('test-mode-msg');
-    msg.textContent=testModeActive?'✓ Test mode attiva — il blocco rigioco è disabilitato':'✓ Test mode disattivata — il blocco rigioco è attivo';
-    msg.style.color=testModeActive?'#4ecdc4':'#aaa';
+    msg.textContent=testModeReplay?'✓ Rigioco sbloccato — stesso contatto può giocare più volte':'✓ Rigioco bloccato — ogni contatto gioca una sola volta';
+    msg.style.color=testModeReplay?'#4ecdc4':'#aaa';
     setTimeout(()=>msg.textContent='',3000);
-  }catch(e){
-    testModeActive=!testModeActive; // revert
-  }
+  }catch(e){testModeReplay=!testModeReplay;}
+}
+
+async function toggleTestDate(){
+  testModeDate=!testModeDate;
+  try{
+    await saveTestMode();
+    updateTestModeUI();
+    applyTestModeBanner();
+    const msg=document.getElementById('test-mode-msg');
+    msg.textContent=testModeDate?'✓ Date bypassate — il gioco funziona in qualsiasi data':'✓ Blocco date attivo — il gioco funziona solo nelle date configurate';
+    msg.style.color=testModeDate?'#4ecdc4':'#aaa';
+    setTimeout(()=>msg.textContent='',3000);
+  }catch(e){testModeDate=!testModeDate;}
 }
 
 function updateTestModeUI(){
-  const btn=document.getElementById('test-mode-btn');
-  const lbl=document.getElementById('test-mode-label');
-  const sub=document.getElementById('test-mode-sub');
-  if(!btn) return;
-  if(testModeActive){
-    btn.textContent='DISATTIVA';
-    btn.style.background='#4ecdc4';
-    btn.style.color='#0a0a0a';
-    btn.style.borderColor='#4ecdc4';
-    lbl.textContent='TEST MODE: ON';
-    lbl.style.color='#4ecdc4';
-    sub.textContent='⚠ Il blocco rigioco è disabilitato — disattiva prima della fiera!';
-    sub.style.color='#ff6b6b';
-  } else {
-    btn.textContent='ATTIVA';
-    btn.style.background='var(--b)';
-    btn.style.color='var(--g)';
-    btn.style.borderColor='var(--b)';
-    lbl.textContent='TEST MODE: OFF';
-    lbl.style.color='var(--w)';
-    sub.textContent='Il gioco blocca chi tenta di rigiocare';
-    sub.style.color='var(--g)';
+  // Replay toggle
+  const rb=document.getElementById('tm-replay-btn');
+  const rl=document.getElementById('tm-replay-label');
+  const rs=document.getElementById('tm-replay-sub');
+  if(rb){
+    if(testModeReplay){
+      rb.textContent='BLOCCA'; rb.style.background='#4ecdc4'; rb.style.color='#0a0a0a'; rb.style.borderColor='#4ecdc4';
+      rl.textContent='RIGIOCO: SBLOCCATO'; rl.style.color='#4ecdc4';
+      rs.textContent='⚠ Stesso contatto può giocare più volte'; rs.style.color='#ff6b6b';
+    } else {
+      rb.textContent='SBLOCCA'; rb.style.background='var(--b)'; rb.style.color='var(--g)'; rb.style.borderColor='var(--b)';
+      rl.textContent='RIGIOCO: BLOCCATO'; rl.style.color='var(--w)';
+      rs.textContent='Lo stesso contatto non può rigiocare'; rs.style.color='var(--g)';
+    }
+  }
+  // Date toggle
+  const db2=document.getElementById('tm-date-btn');
+  const dl=document.getElementById('tm-date-label');
+  const ds=document.getElementById('tm-date-sub');
+  if(db2){
+    if(testModeDate){
+      db2.textContent='RIATTIVA'; db2.style.background='#4ecdc4'; db2.style.color='#0a0a0a'; db2.style.borderColor='#4ecdc4';
+      dl.textContent='DATE: BYPASSED'; dl.style.color='#4ecdc4';
+      ds.textContent='⚠ Il gioco funziona in qualsiasi data'; ds.style.color='#ff6b6b';
+    } else {
+      db2.textContent='BYPASSA'; db2.style.background='var(--b)'; db2.style.color='var(--g)'; db2.style.borderColor='var(--b)';
+      dl.textContent='DATE: ATTIVO'; dl.style.color='var(--w)';
+      ds.textContent='Il gioco funziona solo nelle date configurate'; ds.style.color='var(--g)';
+    }
   }
 }
 
@@ -1365,7 +1408,8 @@ function confirmReset(){
         if(uploadBtn){uploadBtn.style.opacity='.4';uploadBtn.style.pointerEvents='none';}
         document.getElementById('upload-reg-input').value='';
         // Reset test mode
-        testModeActive=false;
+        testModeReplay=false;
+        testModeDate=false;
         updateTestModeUI();
         applyTestModeBanner();
 
