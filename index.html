@@ -773,7 +773,7 @@ window.addEventListener('db-ready',async()=>{
   cUser={token:uToken,name:uName,email:uEmail,fingerprint:uFingerprint};
   try{const p=await window.DB.getConfig('passwords');if(p)PWD=p;}catch(e){}
   // Load test mode states
-  try{const tm=await window.DB.getConfig('testMode');if(tm&&typeof tm==='object'){testModeReplay=!!tm.replay;testModeDate=!!tm.date;}}catch(e){}
+  try{const tm=await window.DB.getConfig('testMode');if(tm&&typeof tm==='object'){testModeReplay=!!tm.replay;testModeDate=!!tm.date;if(typeof tm.day==='number')selectedTestDay=tm.day;}}catch(e){}
   applyTestModeBanner();
   // Load saved regulation for modal use
   try{
@@ -1041,15 +1041,24 @@ function fairDatesLabel(){
 }
 
 async function doShowGame(){
-  // ── FETCH FRESH DATES FROM FIREBASE ──────────────────────────────────────
-  // Read dedicated fairDates key first (fastest), fallback to regDays
+  // ── FETCH FRESH CONFIG FROM FIREBASE ─────────────────────────────────────
+  // Re-read testMode so game always uses latest admin settings (including selected day)
+  try{
+    const tm=await window.DB.getConfig('testMode');
+    if(tm&&typeof tm==='object'){
+      testModeReplay=!!tm.replay;
+      testModeDate=!!tm.date;
+      if(typeof tm.day==='number') selectedTestDay=tm.day;
+    }
+  }catch(e){}
+
+  // Read fair dates
   let fairDates=[];
   try{
     const fd=await window.DB.getConfig('fairDates');
     if(fd&&fd.length>0){
       fairDates=fd;
     } else {
-      // Fallback: read from full regulation config
       const reg=await window.DB.getConfig('regulation');
       if(reg&&reg.regDays&&reg.regDays.length>0){
         regDays=reg.regDays;
@@ -1201,7 +1210,7 @@ function applyTestModeBanner(){
 }
 
 async function saveTestMode(){
-  await window.DB.saveConfig('testMode',{replay:testModeReplay,date:testModeDate});
+  await window.DB.saveConfig('testMode',{replay:testModeReplay,date:testModeDate,day:selectedTestDay});
 }
 
 async function toggleTestReplay(){
@@ -1248,7 +1257,8 @@ function renderWelcomeDaySelector(){} // no-op — day selector is admin-only
 
 function selectTestDay(idx){
   selectedTestDay=idx;
-  renderDayButtons();       // admin selector // welcome page selector
+  saveTestMode(); // persist to Firebase so game page reads it
+  renderDayButtons();
   const msg=document.getElementById('test-mode-msg');
   if(msg){
     msg.textContent=`✓ Simula Giorno ${idx+1}${regDays[idx]?.date?' ('+fmtDate(regDays[idx].date)+')':''}`;
