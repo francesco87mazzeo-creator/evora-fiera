@@ -191,7 +191,15 @@
       await setDoc(doc(db,"assignments",key),data);
     }
 
-    window.DB={initPrizes,assignPrize,checkAlreadyPlayed,markDelivered,getAllAssignments,findByCode,getPrizes,savePrizes,listenAssignment,getConfig,saveConfig,resetAll,saveDaySequence,getDoc_,saveAssignmentPointer};
+    // Read a single day sequence from sequences/dayN
+    async function getConfig_seq(dayIndex){
+      try{
+        const s=await getDoc(doc(db,"sequences","day"+dayIndex));
+        return s.exists()?(s.data().prizes||[]):[];
+      }catch(e){return[];}
+    }
+
+    window.DB={initPrizes,assignPrize,checkAlreadyPlayed,markDelivered,getAllAssignments,findByCode,getPrizes,savePrizes,listenAssignment,getConfig,saveConfig,resetAll,saveDaySequence,getDoc_,saveAssignmentPointer,getConfig_seq};
     await initPrizes();
     window.dispatchEvent(new Event("db-ready"));
   </script>
@@ -779,7 +787,6 @@ window.addEventListener('db-ready',async()=>{
   try{
     const reg=await window.DB.getConfig('regulation');
     if(reg){
-      if(reg.regSequences) regSequences=reg.regSequences;
       if(reg.regDays) regDays=reg.regDays;
       if(reg.regLocked) regLocked=reg.regLocked;
       if(reg.admPrizes) admPrizes=reg.admPrizes;
@@ -787,6 +794,14 @@ window.addEventListener('db-ready',async()=>{
       if(reg.event) savedRegData.event=reg.event;
       if(reg.admPrizes) savedRegData.admPrizes=reg.admPrizes;
     }
+  }catch(e){}
+  // Load day sequences from their dedicated documents (sequences/day0..3)
+  // These are the authoritative sequences — reg.regSequences may be stale or missing
+  try{
+    const seqLoads=await Promise.all([0,1,2,3].map(i=>window.DB.getConfig_seq(i)));
+    const anyLoaded=seqLoads.some(s=>s&&s.length>0);
+    if(anyLoaded) regSequences=seqLoads.map(s=>s||[]);
+    savedRegData.regSequences=regSequences;
   }catch(e){}
   // Load uploaded regulation HTML for user popup
   try{
@@ -1642,9 +1657,17 @@ async function loadRegulationConfig(){
     document.getElementById('rg-venue').value=data.event.venue||'';
   }
   if(data.regDays&&data.regDays.length>0) regDays=data.regDays;
-  if(data.regSequences) regSequences=data.regSequences;
   if(data.regLocked) regLocked=data.regLocked;
   if(data.admPrizes) admPrizes=data.admPrizes;
+  // Load sequences from dedicated documents (authoritative source)
+  try{
+    const seqLoads=await Promise.all([0,1,2,3].map(i=>window.DB.getConfig_seq(i)));
+    const anyLoaded=seqLoads.some(s=>s&&s.length>0);
+    if(anyLoaded) regSequences=seqLoads.map(s=>s||[]);
+    else if(data.regSequences) regSequences=data.regSequences; // fallback to old format
+  }catch(e){
+    if(data.regSequences) regSequences=data.regSequences;
+  }
   renderRegDays();
   if(regDays.some(d=>(d.dist||[]).length>0)) document.getElementById('reg-seq-section').classList.remove('hidden');
   if(regSequences.some(s=>s&&s.length>0)){
