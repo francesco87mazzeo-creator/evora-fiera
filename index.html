@@ -792,6 +792,8 @@ window.addEventListener('db-ready',async()=>{
       if(reg.admPrizes) admPrizes=reg.admPrizes;
       if(reg.company) savedRegData.company=reg.company;
       if(reg.event) savedRegData.event=reg.event;
+      // Ensure event name is properly stored — check both reg.event.name and regulation data
+      if(reg.event?.name) savedRegData.event.name=reg.event.name;
       if(reg.admPrizes) savedRegData.admPrizes=reg.admPrizes;
     }
   }catch(e){}
@@ -888,10 +890,10 @@ function fmtDate(d){
 // Build regulation modal content with full sequences, day tabs
 function buildRegulationModalText(){
   const hasSeq=regSequences.some(s=>s&&s.length>0);
-  const evName=(document.getElementById('rg-event')?.value)||savedRegData.event?.name||'Evora Fiera 2026';
-  const coName=(document.getElementById('rg-name')?.value)||savedRegData.company?.name||'Evora';
-  const coCity=(document.getElementById('rg-city')?.value)||savedRegData.company?.city||savedRegData.company?.name||'';
-  const coVat=(document.getElementById('rg-vat')?.value)||savedRegData.company?.vat||'';
+  const evName=(document.getElementById('rg-event')?.value)||(savedRegData.event?.name)||'[nome evento]';
+  const coName=(document.getElementById('rg-name')?.value)||(savedRegData.company?.name)||'';
+  const coCity=(document.getElementById('rg-city')?.value)||(savedRegData.company?.city)||'';
+  const coVat=(document.getElementById('rg-vat')?.value)||(savedRegData.company?.vat)||'';
   const venue=(document.getElementById('rg-venue')?.value)||savedRegData.event?.venue||'evento fieristico';
   const today=new Date().toLocaleDateString('it-IT');
   const dayDates=regDays.map(d=>d.date?`<strong>${fmtDate(d.date)}</strong>`:'').filter(Boolean).join(', ')||'28–31 maggio 2026';
