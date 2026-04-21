@@ -890,7 +890,7 @@ function buildRegulationModalText(){
   const hasSeq=regSequences.some(s=>s&&s.length>0);
   const evName=(document.getElementById('rg-event')?.value)||savedRegData.event?.name||'Evora Fiera 2026';
   const coName=(document.getElementById('rg-name')?.value)||savedRegData.company?.name||'Evora';
-  const coCity=(document.getElementById('rg-city')?.value)||savedRegData.company?.city||'';
+  const coCity=(document.getElementById('rg-city')?.value)||savedRegData.company?.city||savedRegData.company?.name||'';
   const coVat=(document.getElementById('rg-vat')?.value)||savedRegData.company?.vat||'';
   const venue=(document.getElementById('rg-venue')?.value)||savedRegData.event?.venue||'evento fieristico';
   const today=new Date().toLocaleDateString('it-IT');
@@ -971,9 +971,18 @@ function buildRegulationModalText(){
 
       prizesSection=`
         <h3>Art. 5 — Premi per Giornata</h3>
-        <p>Distribuzione e sequenza dei premi per ogni giorno di fiera. I premi non sono convertibili in denaro.</p>
+        <p>Distribuzione e sequenza dei premi per ogni giorno di fiera. I premi non sono convertibili in denaro e non sono cedibili a terzi.</p>
         <div class="reg-day-tabs">${tabs}</div>
         ${panels}`;
+
+      // Compute total prizes and montepremi
+      const totAll=regSequences.reduce((s,seq)=>s+(seq?seq.length:0),0);
+      const montepremi=regSequences.reduce((s,seq)=>s+(seq?seq.reduce((ps,p)=>ps+(parseFloat(p.value||0)),0):0),0);
+      prizesSection+=`
+        <div style="margin-top:12px;padding:12px 14px;background:rgba(178,34,34,.06);border:1px solid rgba(178,34,34,.2)">
+          <div style="font-family:var(--fd);font-size:10px;letter-spacing:3px;color:var(--red);text-transform:uppercase;margin-bottom:6px">Montepremi Totale</div>
+          <div style="font-size:14px;color:var(--w)"><strong>${totAll} premi</strong> per un valore complessivo di <strong>€${montepremi.toFixed(2)}</strong></div>
+        </div>`;
     }
   } else {
     const prizeSrc=(admPrizes&&admPrizes.length>0)?admPrizes:(savedRegData.admPrizes||[]);
@@ -989,23 +998,37 @@ function buildRegulationModalText(){
 
   document.getElementById('reg-modal-content').innerHTML=`
     <h3>Art. 1 — Soggetto Promotore</h3>
-    <p><strong>${coName}</strong>${coVat?' — P.IVA '+coVat:''} organizza il presente concorso ai sensi del D.P.R. 430/2001.</p>
-    <h3>Art. 2 — Oggetto</h3>
-    <p>Operazione <strong>"${evName}"</strong> in occasione di ${venue}.</p>
-    <h3>Art. 3 — Partecipazione</h3>
-    <p>Persone fisiche maggiorenni che compilano il modulo di registrazione. <strong>Una sola partecipazione per persona.</strong></p>
-    <h3>Art. 4 — Periodo</h3>
-    <p>${dayDates}.</p>
+    <p><strong>${coName}</strong>${coVat?' (P.IVA '+coVat+')':''} con sede in ${savedRegData.company?.addr||'[indirizzo]'} organizza il presente concorso a premi ai sensi del D.P.R. 26 novembre 2001, n. 430.</p>
+
+    <h3>Art. 2 — Oggetto del Concorso</h3>
+    <p>Operazione a premi denominata <strong>"${evName}"</strong> con finalità promozionali, svolta in occasione di ${venue}. La partecipazione è gratuita e non richiede alcun acquisto.</p>
+
+    <h3>Art. 3 — Soggetti Ammessi</h3>
+    <p>Possono partecipare le persone fisiche maggiorenni residenti in Italia. Sono esclusi dipendenti e collaboratori del soggetto promotore e dei soggetti coinvolti nell'organizzazione.</p>
+
+    <h3>Art. 4 — Periodo e Luogo</h3>
+    <p>Il concorso si svolge nei giorni: ${dayDates}.<br>Luogo: ${venue||'stand Evora'}.</p>
+
     ${prizesSection}
-    <h3>${a6} — Meccanismo</h3>
-    <p>I premi sono assegnati tramite <strong>sequenza predeterminata</strong> con algoritmo Fisher-Yates deterministico. Nessuna componente casuale in tempo reale.</p>
-    <h3>${a7} — Consegna</h3>
-    <p>I premi vengono consegnati presso lo stand Evora, previa verifica del codice univoco. Ogni codice è valido una sola volta.</p>
-    <h3>${a8} — Privacy</h3>
-    <p>Dati trattati ai sensi del GDPR UE 2016/679. Per il testo completo clicca "Privacy".</p>
-    <h3>Art. 9 — Foro Competente</h3>
-    <p>Foro: <strong>${coCity||'indicato nel regolamento completo'}</strong>. Normativa: D.P.R. 430/2001.</p>
-    <p style="margin-top:14px;font-size:11px;color:#444">Generato il ${today}.</p>`;
+
+    <h3>Art. 6 — Meccanismo di Assegnazione</h3>
+    <p>I premi sono assegnati tramite <strong>sequenza predeterminata</strong> generata prima dell'inizio del concorso con algoritmo Fisher-Yates a seed deterministico, depositata agli atti. L'assegnazione avviene in ordine di partecipazione giornaliera. Non vi è alcuna componente casuale in tempo reale.</p>
+
+    <h3>Art. 7 — Modalità di Partecipazione</h3>
+    <p>Il partecipante compila il modulo di registrazione presso lo stand, fornendo nome ed email. Riceve quindi un biglietto digitale "gratta e vinci". Ogni persona può partecipare <strong>una sola volta</strong> per tutta la durata del concorso, identificata tramite indirizzo email e dispositivo.</p>
+
+    <h3>Art. 8 — Consegna dei Premi</h3>
+    <p>I premi vengono consegnati immediatamente presso lo stand ${coName||'Evora'}, previa verifica del codice univoco generato dal sistema. Il codice è valido una sola volta. I premi non sono convertibili in denaro, non sono cedibili a terzi e non sono cumulabili.</p>
+
+    <h3>Art. 9 — Premi Non Ritirati</h3>
+    <p>I premi non ritirati entro il termine della giornata di fiera vengono considerati non assegnati e rimangono nella disponibilità del promotore.</p>
+
+    <h3>Art. 10 — Trattamento dei Dati Personali</h3>
+    <p>Il titolare del trattamento è <strong>${coName||'[ragione sociale]'}</strong>${savedRegData.company?.email?' — contatto: '+savedRegData.company.email:''}. I dati (nome, email) sono trattati ai sensi del Regolamento UE 2016/679 (GDPR) per la gestione del concorso e, previo consenso esplicito, per l'invio di comunicazioni commerciali. Il consenso al marketing è revocabile in qualsiasi momento. Per il testo completo dell'informativa clicca "Privacy".</p>
+
+    <h3>Art. 11 — Foro Competente</h3>
+    <p>Per qualsiasi controversia relativa al presente concorso è esclusivamente competente il Tribunale di <strong>${coCity||'[città sede legale]'}</strong>. Si applica la normativa italiana, in particolare il D.P.R. 26 novembre 2001, n. 430.</p>
+    <p style="margin-top:14px;font-size:11px;color:#444">Documento generato il ${today}. Il regolamento integrale con allegati tecnici (sequenze e seed) è disponibile presso lo stand ${coName||'Evora'}.</p>`;
 }
 
 function toggleSeqDetail(i){
