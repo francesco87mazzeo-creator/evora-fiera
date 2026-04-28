@@ -839,25 +839,20 @@ window.addEventListener('db-ready',async()=>{
       if(reg.admPrizes) admPrizes=reg.admPrizes;
       if(reg.company) savedRegData.company=reg.company;
       if(reg.event) savedRegData.event=reg.event;
-      // Ensure event name is properly stored — check both reg.event.name and regulation data
       if(reg.event?.name) savedRegData.event.name=reg.event.name;
       if(reg.admPrizes) savedRegData.admPrizes=reg.admPrizes;
     }
   }catch(e){}
-  // Load day sequences from their dedicated documents (sequences/day0..3)
-  // These are the authoritative sequences — reg.regSequences may be stale or missing
   try{
     const seqLoads=await Promise.all([0,1,2,3].map(i=>window.DB.getConfig_seq(i)));
     const anyLoaded=seqLoads.some(s=>s&&s.length>0);
     if(anyLoaded) regSequences=seqLoads.map(s=>s||[]);
     savedRegData.regSequences=regSequences;
   }catch(e){}
-  // Load uploaded regulation HTML for user popup
   try{
     const regHtml=await window.DB.getConfig('regulation_html');
     if(regHtml) savedRegData.regulationHtml=regHtml;
   }catch(e){}
-  // Fallback: if no saved regulation, load prizes from Firebase directly
   if(!admPrizes.length){
     try{
       const prizes=await window.DB.getPrizes();
@@ -865,26 +860,56 @@ window.addEventListener('db-ready',async()=>{
     }catch(e){}
   }
   buildRegulationModalText();
-  // Animate loader bar
-  const loaderBar=document.getElementById('loader-bar');
-  if(loaderBar){
-    let pct=0;
-    const iv=setInterval(()=>{
-      pct+=Math.random()*15;
-      if(pct>=100){pct=100;clearInterval(iv);}
-      loaderBar.style.width=Math.min(pct,100)+'%';
-    },80);
-  }
-  document.getElementById('loader').style.opacity='0';
+
+  // Signal Firebase is ready — loader will hide when bar also reaches 100%
+  window._firebaseReady = true;
+  if(window._loaderBarDone) showApp();
+});
+
+// Start loader bar animation immediately when page loads — independent of Firebase
+window._firebaseReady = false;
+window._loaderBarDone = false;
+
+function showApp(){
+  const loader = document.getElementById('loader');
+  loader.style.opacity = '0';
   setTimeout(()=>{
-    document.getElementById('loader').style.display='none';
-    document.getElementById('app').style.display='flex';
-    const h=window.location.hash;
+    loader.style.display = 'none';
+    document.getElementById('app').style.display = 'flex';
+    const h = window.location.hash;
     if(h==='#staff') showLoginStaff();
     else if(h==='#admin') showLoginAdmin();
     else showWelcome();
-  },400);
-});
+  }, 400);
+}
+
+(function startLoaderBar(){
+  const loaderBar = document.getElementById('loader-bar');
+  if(!loaderBar) return;
+  let pct = 0;
+  // Slow phase: 0→70% in ~1.8s to give Firebase time to load
+  // Fast phase: 70→100% quickly once Firebase signals ready
+  const iv = setInterval(()=>{
+    if(pct < 70){
+      // Slow natural-feeling progress
+      pct += Math.random() * 4 + 1;
+      if(pct > 70) pct = 70;
+    } else if(window._firebaseReady){
+      // Firebase done — sprint to 100%
+      pct += Math.random() * 12 + 8;
+      if(pct >= 100){
+        pct = 100;
+        loaderBar.style.width = '100%';
+        clearInterval(iv);
+        window._loaderBarDone = true;
+        if(window._firebaseReady) showApp();
+        return;
+      }
+    }
+    // Stall at 70% if Firebase not ready yet
+    loaderBar.style.width = Math.min(pct, 100) + '%';
+  }, 60);
+})();
 
 // ── PAGE NAV ──────────────────────────────────────────────────────────────
 // ── SMOOTH PAGE TRANSITIONS ──────────────────────────────────────────────
@@ -1495,8 +1520,10 @@ function initScratch(){
       ctx.globalCompositeOperation='destination-out';
       // Reveal prize layer now that canvas covers it
       const pbgEl=document.getElementById('pbg');if(pbgEl)pbgEl.style.opacity='1';
-      // Start shimmer with white logo as mask
-      maskImg.src='data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA1OTUuMjggMjgyLjYyIj48cGF0aCBmaWxsPSJ3aGl0ZSIgZD0iTTMxLjQ4LDk0LjIxaDcxLjA1djE4LjQ0SDUyLjA3djE5LjExaDQ0LjR2MTguNDNINTIuMDdWMTcwSDEwMy4ydjE4LjQ0SDMxLjQ4WiIvPjxwYXRoIGZpbGw9IndoaXRlIiBkPSJNMTI2LjI2LDkzLjg4aDIyLjg3bDI0LjYzLDY2LjM0LDI0LjYzLTY2LjM0aDIyLjMzbC0zOC4wOCw5NC44N2gtMTguM1oiLz48cGF0aCBmaWxsPSJ3aGl0ZSIgZD0iTTI0MCwxNDEuNTh2LS4yN2MwLTI2Ljc4LDIxLjEzLTQ4LjcxLDUwLjItNDguNzFzNDkuOTIsMjEuNjYsNDkuOTIsNDguNDR2LjI3QzM0MC4xNiwxNjguMDksMzE5LDE5MCwyOTAsMTkwUzI0MCwxNjguMzYsMjQwLDE0MS41OFptNzguNDYsMHYtLjI3YzAtMTYuMTUtMTEuODUtMjkuNi0yOC41My0yOS42UzI2MS43MSwxMjQuOSwyNjEuNzEsMTQxdi4yN2MwLDE2LjE1LDExLjg0LDI5LjYxLDI4LjUzLDI5LjYxUzMxOC41LDE1Ny43MywzMTguNSwxNDEuNThaIi8+PHBhdGggZmlsbD0id2hpdGUiIGQ9Ik0zNjcsOTQuMjFINDEwYzEyLDAsMjEuMTIsMy4yMywyNy40NSw5LjU2LDUuMzgsNS4zOCw4LjA3LDEyLjUxLDguMDcsMjEuNTN2LjI3YzAsMTUuMi04LjIxLDI0Ljc2LTIwLjE5LDI5LjJsMjMsMzMuNjRINDI0LjE0TDQwNCwxNTguMjdIMzg3LjY4djMwLjE0SDM2N1pNNDA4LjY3LDE0MGMxMC4yMywwLDE1Ljg4LTUuMjUsMTUuODgtMTMuMzN2LS4yNmMwLTktNi4wNi0xMy40Ni0xNi4yOC0xMy40NkgzODcuNjhWMTQwWiIvPjxwYXRoIGZpbGw9IndoaXRlIiBkPSJNNTEzLjg3LDExOC4xbC0yOC44LDcwLjY1SDQ2NGw0MC4zNy05NC44N2gxOS4xbDQwLjM3LDk0Ljg3SDU0Mi4xM0w1MTMuODcsMTE4LjEiLz48L3N2Zz4=';
+      // Start shimmer with white logo as mask — delay 400ms so canvas is painted first
+      setTimeout(()=>{
+        maskImg.src='data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA1OTUuMjggMjgyLjYyIj48cGF0aCBmaWxsPSJ3aGl0ZSIgZD0iTTMxLjQ4LDk0LjIxaDcxLjA1djE4LjQ0SDUyLjA3djE5LjExaDQ0LjR2MTguNDNINTIuMDdWMTcwSDEwMy4ydjE4LjQ0SDMxLjQ4WiIvPjxwYXRoIGZpbGw9IndoaXRlIiBkPSJNMTI2LjI2LDkzLjg4aDIyLjg3bDI0LjYzLDY2LjM0LDI0LjYzLTY2LjM0aDIyLjMzbC0zOC4wOCw5NC44N2gtMTguM1oiLz48cGF0aCBmaWxsPSJ3aGl0ZSIgZD0iTTI0MCwxNDEuNTh2LS4yN2MwLTI2Ljc4LDIxLjEzLTQ4LjcxLDUwLjItNDguNzFzNDkuOTIsMjEuNjYsNDkuOTIsNDguNDR2LjI3QzM0MC4xNiwxNjguMDksMzE5LDE5MCwyOTAsMTkwUzI0MCwxNjguMzYsMjQwLDE0MS41OFptNzguNDYsMHYtLjI3YzAtMTYuMTUtMTEuODUtMjkuNi0yOC41My0yOS42UzI2MS43MSwxMjQuOSwyNjEuNzEsMTQxdi4yN2MwLDE2LjE1LDExLjg0LDI5LjYxLDI4LjUzLDI5LjYxUzMxOC41LDE1Ny43MywzMTguNSwxNDEuNThaIi8+PHBhdGggZmlsbD0id2hpdGUiIGQ9Ik0zNjcsOTQuMjFINDEwYzEyLDAsMjEuMTIsMy4yMywyNy40NSw5LjU2LDUuMzgsNS4zOCw4LjA3LDEyLjUxLDguMDcsMjEuNTN2LjI3YzAsMTUuMi04LjIxLDI0Ljc2LTIwLjE5LDI5LjJsMjMsMzMuNjRINDI0LjE0TDQwNCwxNTguMjdIMzg3LjY4djMwLjE0SDM2N1pNNDA4LjY3LDE0MGMxMC4yMywwLDE1Ljg4LTUuMjUsMTUuODgtMTMuMzN2LS4yNmMwLTktNi4wNi0xMy40Ni0xNi4yOC0xMy40NkgzODcuNjhWMTQwWiIvPjxwYXRoIGZpbGw9IndoaXRlIiBkPSJNNTEzLjg3LDExOC4xbC0yOC44LDcwLjY1SDQ2NGw0MC4zNy05NC44N2gxOS4xbDQwLjM3LDk0Ljg3SDU0Mi4xM0w1MTMuODcsMTE4LjEiLz48L3N2Zz4=';
+      }, 400);
       if(onDone)onDone();
     };
     img.onerror=()=>{ctx.globalCompositeOperation='destination-out';const pbgEl=document.getElementById('pbg');if(pbgEl)pbgEl.style.opacity='1';if(onDone)onDone();};
