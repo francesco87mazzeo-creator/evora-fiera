@@ -2,6 +2,7 @@
 <html lang="it">
 <head>
   <meta charset="UTF-8"/>
+  <meta name="theme-color" content="#060608"/>
   <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no"/>
   <title>Evora — Fiera 2026</title>
   <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;600;700&family=Barlow+Condensed:wght@400;600;700;800&family=Barlow:wght@400;500&display=swap" rel="stylesheet"/>
@@ -209,13 +210,23 @@
     *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
     html,body{background:var(--bg);color:var(--w);font-family:var(--fb);min-height:100vh;overflow-x:hidden}
     body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;opacity:.3;background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.05'/%3E%3C/svg%3E")}
-    #loader{position:fixed;inset:0;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:999;transition:opacity .4s}
+    #loader{position:fixed;inset:0;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:999;transition:opacity .5s}
+    .loader-logo-img{width:110px;opacity:0;animation:fu .7s .2s cubic-bezier(.16,1,.3,1) forwards;margin-bottom:28px}
+    .loader-bar-wrap{width:150px;height:2px;background:rgba(255,255,255,.06);border-radius:1px;overflow:hidden;margin-bottom:14px}
+    .loader-bar-inner{height:100%;width:0%;background:linear-gradient(90deg,#8b1a1a,var(--red));border-radius:1px;transition:width .06s linear}
+    .loader-sub{font-family:var(--fd);font-size:9px;letter-spacing:5px;color:#444;text-transform:uppercase;opacity:0;animation:fu .5s .7s forwards}
     .ll{font-family:var(--fd);font-size:48px;font-weight:800;letter-spacing:6px;margin-bottom:24px}.ll span{color:var(--red)}
     .sp{width:32px;height:32px;border:2px solid var(--b);border-top-color:var(--red);border-radius:50%;animation:spin .8s linear infinite}
     @keyframes spin{to{transform:rotate(360deg)}}
     #app{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px 16px 60px;position:relative;z-index:1}
     .page{width:100%;max-width:420px;display:flex;flex-direction:column;align-items:center;animation:fu .5s cubic-bezier(.16,1,.3,1) both}
     @keyframes fu{from{opacity:0;transform:translateY(24px)}to{opacity:1;transform:none}}
+
+    /* ── PAGE TRANSITIONS ───────────────────────────────────────────── */
+    .page-out{animation:pageOut .3s ease forwards!important}
+    .page-in{animation:pageIn .45s cubic-bezier(.16,1,.3,1) forwards!important}
+    @keyframes pageOut{to{opacity:0;transform:translateY(-16px)}}
+    @keyframes pageIn{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:none}}
     .hidden{display:none!important}
 
     /* WELCOME */
@@ -429,7 +440,11 @@
   </style>
 </head>
 <body>
-<div id="loader"><div class="ll">EV<span>O</span>RA</div><div class="sp"></div></div>
+<div id="loader">
+  <img class="loader-logo-img" src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA1OTUuMjggMjgyLjYyIj48cGF0aCBmaWxsPSIjZjBlZGU4IiBkPSJNMzEuNDgsOTQuMjFoNzEuMDV2MTguNDRINTIuMDd2MTkuMTFoNDQuNHYxOC40M0g1Mi4wN1YxNzBIMTAzLjJ2MTguNDRIMzEuNDhaIi8+PHBhdGggZmlsbD0iI2YwZWRlOCIgZD0iTTEyNi4yNiw5My44OGgyMi44N2wyNC42Myw2Ni4zNCwyNC42My02Ni4zNGgyMi4zM2wtMzguMDgsOTQuODdoLTE4LjNaIi8+PHBhdGggZmlsbD0iI2YwZWRlOCIgZD0iTTI0MCwxNDEuNTh2LS4yN2MwLTI2Ljc4LDIxLjEzLTQ4LjcxLDUwLjItNDguNzFzNDkuOTIsMjEuNjYsNDkuOTIsNDguNDR2LjI3QzM0MC4xNiwxNjguMDksMzE5LDE5MCwyOTAsMTkwUzI0MCwxNjguMzYsMjQwLDE0MS41OFptNzguNDYsMHYtLjI3YzAtMTYuMTUtMTEuODUtMjkuNi0yOC41My0yOS42UzI2MS43MSwxMjQuOSwyNjEuNzEsMTQxdi4yN2MwLDE2LjE1LDExLjg0LDI5LjYxLDI4LjUzLDI5LjYxUzMxOC41LDE1Ny43MywzMTguNSwxNDEuNThaIi8+PHBhdGggZmlsbD0iI2YwZWRlOCIgZD0iTTM2Nyw5NC4yMUg0MTBjMTIsMCwyMS4xMiwzLjIzLDI3LjQ1LDkuNTYsNS4zOCw1LjM4LDguMDcsMTIuNTEsOC4wNywyMS41M3YuMjdjMCwxNS4yLTguMjEsMjQuNzYtMjAuMTksMjkuMmwyMywzMy42NEg0MjQuMTRMNDA0LDE1OC4yN0gzODcuNjh2MzAuMTRIMzY3Wk00MDguNjcsMTQwYzEwLjIzLDAsMTUuODgtNS4yNSwxNS44OC0xMy4zM3YtLjI2YzAtOS02LjA2LTEzLjQ2LTE2LjI4LTEzLjQ2SDM4Ny42OFYxNDBaIi8+PHBhdGggZmlsbD0iI2YwZWRlOCIgZD0iTTUxMy44NywxMTguMWwtMjguOCw3MC42NUg0NjRsNDAuMzctOTQuODdoMTkuMWw0MC4zNyw5NC44N0g1NDIuMTNMNTEzLjg3LDExOC4xIi8+PC9zdmc+" alt="Evora"/>
+  <div class="loader-bar-wrap"><div class="loader-bar-inner" id="loader-bar"></div></div>
+  <div class="loader-sub">Caricamento</div>
+</div>
 <div id="glow"></div>
 <canvas id="pcv"></canvas>
 
@@ -464,11 +479,23 @@
 
   <!-- WELCOME -->
   <div id="pg-welcome" class="page hidden">
-    <div class="wl">EVORA <span>●</span> FIERA 2026</div>
+    <div style="display:flex;align-items:center;justify-content:space-between;width:100%;margin-bottom:36px">
+      <img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA1OTUuMjggMjgyLjYyIj48cGF0aCBmaWxsPSIjZjBlZGU4IiBkPSJNMzEuNDgsOTQuMjFoNzEuMDV2MTguNDRINTIuMDd2MTkuMTFoNDQuNHYxOC40M0g1Mi4wN1YxNzBIMTAzLjJ2MTguNDRIMzEuNDhaIi8+PHBhdGggZmlsbD0iI2YwZWRlOCIgZD0iTTEyNi4yNiw5My44OGgyMi44N2wyNC42Myw2Ni4zNCwyNC42My02Ni4zNGgyMi4zM2wtMzguMDgsOTQuODdoLTE4LjNaIi8+PHBhdGggZmlsbD0iI2YwZWRlOCIgZD0iTTI0MCwxNDEuNTh2LS4yN2MwLTI2Ljc4LDIxLjEzLTQ4LjcxLDUwLjItNDguNzFzNDkuOTIsMjEuNjYsNDkuOTIsNDguNDR2LjI3QzM0MC4xNiwxNjguMDksMzE5LDE5MCwyOTAsMTkwUzI0MCwxNjguMzYsMjQwLDE0MS41OFptNzguNDYsMHYtLjI3YzAtMTYuMTUtMTEuODUtMjkuNi0yOC41My0yOS42UzI2MS43MSwxMjQuOSwyNjEuNzEsMTQxdi4yN2MwLDE2LjE1LDExLjg0LDI5LjYxLDI4LjUzLDI5LjYxUzMxOC41LDE1Ny43MywzMTguNSwxNDEuNThaIi8+PHBhdGggZmlsbD0iI2YwZWRlOCIgZD0iTTM2Nyw5NC4yMUg0MTBjMTIsMCwyMS4xMiwzLjIzLDI3LjQ1LDkuNTYsNS4zOCw1LjM4LDguMDcsMTIuNTEsOC4wNywyMS41M3YuMjdjMCwxNS4yLTguMjEsMjQuNzYtMjAuMTksMjkuMmwyMywzMy42NEg0MjQuMTRMNDA0LDE1OC4yN0gzODcuNjh2MzAuMTRIMzY3Wk00MDguNjcsMTQwYzEwLjIzLDAsMTUuODgtNS4yNSwxNS44OC0xMy4zM3YtLjI2YzAtOS02LjA2LTEzLjQ2LTE2LjI4LTEzLjQ2SDM4Ny42OFYxNDBaIi8+PHBhdGggZmlsbD0iI2YwZWRlOCIgZD0iTTUxMy44NywxMTguMWwtMjguOCw3MC42NUg0NjRsNDAuMzctOTQuODdoMTkuMWw0MC4zNyw5NC44N0g1NDIuMTNMNTEzLjg3LDExOC4xIi8+PC9zdmc+" alt="Evora" style="height:18px"/>
+      <span style="font-family:var(--fd);font-size:8px;font-weight:700;letter-spacing:4px;color:var(--g2,#444);text-transform:uppercase;border:1px solid var(--b);padding:5px 10px">Fiera 2026</span>
+    </div>
     <div class="wt">IL TUO<br><em>PREMIO</em><br>TI ASPETTA</div>
     <div class="wn">Benvenuto, <strong id="uname">Ospite</strong></div>
-    <div class="wc"><div class="wcl">Come funziona</div>
-      <div class="wct">Hai completato la registrazione.<br>Ora <strong>gratta il biglietto</strong> e scopri il tuo premio.<br>Mostra il codice allo staff per ritirarlo subito.</div>
+    <div style="width:100%;background:var(--s);border:1px solid var(--b);padding:18px;position:relative;overflow:hidden;margin-bottom:20px;animation:pulse-border 3s ease-in-out infinite">
+      <style>.pulse-border{border-color:rgba(178,34,34,.4)!important}@keyframes pulse-border{0%,100%{border-color:var(--b)}50%{border-color:rgba(178,34,34,.35)}}</style>
+      <div style="position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent,var(--red),transparent)"></div>
+      <div style="display:flex;align-items:center;gap:14px">
+        <div style="font-size:40px;filter:drop-shadow(0 0 14px rgba(178,34,34,.5));animation:flt 2.5s ease-in-out infinite">🎟️</div>
+        <div>
+          <div style="font-family:var(--fd);font-size:9px;letter-spacing:4px;color:var(--red);text-transform:uppercase;margin-bottom:4px">Gratta &amp; Vinci</div>
+          <div style="font-family:var(--fd);font-size:22px;font-weight:900;letter-spacing:2px;line-height:1;margin-bottom:3px">Scopri il tuo premio</div>
+          <div style="font-size:12px;color:var(--g);line-height:1.5">Gratta il biglietto e ritira subito il premio allo stand.</div>
+        </div>
+      </div>
     </div>
     <button class="cta" onclick="doShowGame()">Scopri il tuo premio →</button>
     <div class="accept-line">Giocando accetti il <a onclick="openRegModal()">regolamento</a></div>
@@ -478,9 +505,20 @@
   <div id="pg-game" class="page hidden">
     <div class="gh"><div class="gl">EV<span>O</span>RA</div><div class="gs">BIGLIETTO VINCENTE</div></div>
     <div class="ticket">
-      <div class="tt"><div class="tb2">EV<span>O</span>RA</div><div class="ts2">GRATTA & VINCI · FIERA 2026</div><div class="tn" id="tnum">#000000</div></div>
+      <div class="tt">
+        <div style="display:flex;align-items:center;justify-content:space-between">
+          <div>
+            <img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA1OTUuMjggMjgyLjYyIj48cGF0aCBmaWxsPSIjZjBlZGU4IiBkPSJNMzEuNDgsOTQuMjFoNzEuMDV2MTguNDRINTIuMDd2MTkuMTFoNDQuNHYxOC40M0g1Mi4wN1YxNzBIMTAzLjJ2MTguNDRIMzEuNDhaIi8+PHBhdGggZmlsbD0iI2YwZWRlOCIgZD0iTTEyNi4yNiw5My44OGgyMi44N2wyNC42Myw2Ni4zNCwyNC42My02Ni4zNGgyMi4zM2wtMzguMDgsOTQuODdoLTE4LjNaIi8+PHBhdGggZmlsbD0iI2YwZWRlOCIgZD0iTTI0MCwxNDEuNTh2LS4yN2MwLTI2Ljc4LDIxLjEzLTQ4LjcxLDUwLjItNDguNzFzNDkuOTIsMjEuNjYsNDkuOTIsNDguNDR2LjI3QzM0MC4xNiwxNjguMDksMzE5LDE5MCwyOTAsMTkwUzI0MCwxNjguMzYsMjQwLDE0MS41OFptNzguNDYsMHYtLjI3YzAtMTYuMTUtMTEuODUtMjkuNi0yOC41My0yOS42UzI2MS43MSwxMjQuOSwyNjEuNzEsMTQxdi4yN2MwLDE2LjE1LDExLjg0LDI5LjYxLDI4LjUzLDI5LjYxUzMxOC41LDE1Ny43MywzMTguNSwxNDEuNThaIi8+PHBhdGggZmlsbD0iI2YwZWRlOCIgZD0iTTM2Nyw5NC4yMUg0MTBjMTIsMCwyMS4xMiwzLjIzLDI3LjQ1LDkuNTYsNS4zOCw1LjM4LDguMDcsMTIuNTEsOC4wNywyMS41M3YuMjdjMCwxNS4yLTguMjEsMjQuNzYtMjAuMTksMjkuMmwyMywzMy42NEg0MjQuMTRMNDA0LDE1OC4yN0gzODcuNjh2MzAuMTRIMzY3Wk00MDguNjcsMTQwYzEwLjIzLDAsMTUuODgtNS4yNSwxNS44OC0xMy4zM3YtLjI2YzAtOS02LjA2LTEzLjQ2LTE2LjI4LTEzLjQ2SDM4Ny42OFYxNDBaIi8+PHBhdGggZmlsbD0iI2YwZWRlOCIgZD0iTTUxMy44NywxMTguMWwtMjguOCw3MC42NUg0NjRsNDAuMzctOTQuODdoMTkuMWw0MC4zNyw5NC44N0g1NDIuMTNMNTEzLjg3LDExOC4xIi8+PC9zdmc+" alt="Evora" style="height:16px;display:block;margin-bottom:4px"/>
+            <div class="ts2">GRATTA &amp; VINCI · FIERA 2026</div>
+          </div>
+          <div style="text-align:right">
+            <div style="font-family:var(--fd);font-size:7px;letter-spacing:2px;color:var(--b,#2a2a2a);text-transform:uppercase;margin-bottom:2px">Biglietto</div>
+            <div class="tn" id="tnum" style="font-family:'Courier New',monospace;font-size:10px;letter-spacing:1px;color:#444">#000000</div>
+          </div>
+        </div>
+      </div>
       <div class="tsa">
-        <div class="pbg" id="pbg" style="height:220px"><div class="pbgp"></div><div class="pe" id="pe">🎁</div><div class="pn" id="pn">Premio</div><div class="pd" id="pd"></div></div>
+        <div class="pbg" id="pbg" style="height:220px;opacity:0;transition:opacity 0s"><div class="pbgp"></div><div class="pe" id="pe">🎁</div><div class="pn" id="pn">Premio</div><div class="pd" id="pd"></div></div>
         <canvas id="scratch-canvas"></canvas>
       </div>
       <div class="tbot"><div class="tser" id="tser">EVR · 2026</div><div class="tdots"><div class="tdot r"></div><div class="tdot r"></div><div class="tdot"></div></div></div>
@@ -510,8 +548,17 @@
       <div class="tye">🎉</div>
       <div class="tyt">GRAZIE<span>MILLE!</span></div>
       <div class="tys">Il tuo premio è stato consegnato</div>
-      <div class="tyc"><div class="tyct">Grazie per aver visitato lo stand <strong>Evora</strong>.<br>Seguici su Instagram e sul nostro sito per non perdere nessuna novità.<br><br><strong>Buona fiera! 💪</strong></div></div>
-      <div class="tyf">EVORA · FIERA 2026</div>
+      <div class="tyc"><div class="tyct">Grazie per aver visitato lo stand <strong>Evora</strong>.<br>Non perderti i prossimi drop e le novità della collezione.<br><br><strong>Buona fiera! 💪</strong></div></div>
+      <div style="width:100%;display:flex;flex-direction:column;gap:10px;margin-top:4px">
+        <div style="font-family:var(--fd);font-size:9px;letter-spacing:4px;color:var(--g2,#444);text-transform:uppercase;text-align:center;margin-bottom:2px">Resta in contatto</div>
+        <a href="https://instagram.com/evorafitness" target="_blank" style="display:flex;align-items:center;justify-content:center;gap:10px;width:100%;padding:14px;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08);color:var(--w);font-family:var(--fd);font-size:13px;font-weight:700;letter-spacing:2px;text-transform:uppercase;text-decoration:none;">
+          📱 &nbsp;@evorafitness
+        </a>
+        <a href="https://evorafitness.it" target="_blank" style="display:flex;align-items:center;justify-content:center;gap:10px;width:100%;padding:14px;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08);color:var(--w);font-family:var(--fd);font-size:13px;font-weight:700;letter-spacing:2px;text-transform:uppercase;text-decoration:none;">
+          🌐 &nbsp;evorafitness.it
+        </a>
+      </div>
+      <div class="tyf" style="margin-top:20px">EVORA · FIERA 2026</div>
     </div>
   </div>
 
@@ -818,6 +865,16 @@ window.addEventListener('db-ready',async()=>{
     }catch(e){}
   }
   buildRegulationModalText();
+  // Animate loader bar
+  const loaderBar=document.getElementById('loader-bar');
+  if(loaderBar){
+    let pct=0;
+    const iv=setInterval(()=>{
+      pct+=Math.random()*15;
+      if(pct>=100){pct=100;clearInterval(iv);}
+      loaderBar.style.width=Math.min(pct,100)+'%';
+    },80);
+  }
   document.getElementById('loader').style.opacity='0';
   setTimeout(()=>{
     document.getElementById('loader').style.display='none';
@@ -830,6 +887,31 @@ window.addEventListener('db-ready',async()=>{
 });
 
 // ── PAGE NAV ──────────────────────────────────────────────────────────────
+// ── SMOOTH PAGE TRANSITIONS ──────────────────────────────────────────────
+function transitionTo(showId){
+  const pages=['pg-welcome','pg-game','pg-result','pg-ty','pg-login-staff','pg-login-admin','pg-staff','pg-admin'];
+  const curEl=pages.map(id=>document.getElementById(id)).find(el=>el&&!el.classList.contains('hidden')&&el.style.display!=='none'&&el.style.display!=='');
+  const nextEl=document.getElementById(showId);
+  if(!nextEl)return;
+  if(curEl&&curEl!==nextEl){
+    curEl.classList.add('page-out');
+    setTimeout(()=>{
+      curEl.classList.remove('page-out');
+      pages.forEach(id=>{const e=document.getElementById(id);if(e){e.classList.add('hidden');e.style.display='';}});
+      nextEl.classList.remove('hidden');
+      nextEl.style.display='block';
+      nextEl.classList.add('page-in');
+      setTimeout(()=>nextEl.classList.remove('page-in'),500);
+      window.scrollTo(0,0);
+    },280);
+  } else {
+    pages.forEach(id=>{const e=document.getElementById(id);if(e){e.classList.add('hidden');e.style.display='';}});
+    nextEl.classList.remove('hidden');
+    nextEl.style.display='block';
+    window.scrollTo(0,0);
+  }
+}
+
 function hideAll(){
   ['pg-welcome','pg-game','pg-result','pg-ty','pg-login-staff','pg-login-admin','pg-staff','pg-admin'].forEach(id=>{
     const e=document.getElementById(id);
@@ -841,7 +923,7 @@ function showFooter(){document.getElementById('footer').classList.remove('hidden
 function hideFooter(){document.getElementById('footer').classList.add('hidden');}
 
 function showWelcome(){
-  hideAll();stopCamera();
+  transitionTo('pg-welcome');stopCamera();
   if(rtUnsub){rtUnsub();rtUnsub=null;}
   document.getElementById('uname').textContent=cUser.name;
   show('pg-welcome');showFooter();
@@ -1351,7 +1433,7 @@ function updateTestModeUI(){
 }
 
 function showResult(){
-  hideAll(); show('pg-result'); showFooter();
+  transitionTo('pg-result');showFooter();
   document.getElementById('rem').textContent=cAsgn.prizeEmoji;
   document.getElementById('rnm').textContent=cAsgn.prizeName;
   document.getElementById('rdc').textContent=cAsgn.prizeDesc;
@@ -1365,7 +1447,7 @@ function showResult(){
 
 function showTY(){
   if(rtUnsub){rtUnsub();rtUnsub=null;}
-  hideAll();show('pg-ty');hideFooter();
+  transitionTo('pg-ty');hideFooter();
   if(navigator.vibrate)navigator.vibrate([0,100,50,200,50,100]);
 }
 
@@ -1379,40 +1461,137 @@ function copyCode(){
 
 // ── SCRATCH ───────────────────────────────────────────────────────────────
 function initScratch(){
-  const cv=document.getElementById('scratch-canvas'),W=360,H=220;
+  const cv=document.getElementById('scratch-canvas'),W=360,H=240;
   cv.width=W;cv.height=H;cv.style.height=H+'px';
   document.getElementById('pbg').style.height=H+'px';
   const ctx=cv.getContext('2d');
-  const g=ctx.createLinearGradient(0,0,W,H);
-  g.addColorStop(0,'#1c1c1c');g.addColorStop(.5,'#222');g.addColorStop(1,'#141414');
-  ctx.fillStyle=g;ctx.fillRect(0,0,W,H);
-  ctx.globalAlpha=.055;ctx.strokeStyle='#fff';ctx.lineWidth=.5;
-  for(let x=0;x<W;x+=14){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke();}
-  for(let y=0;y<H;y+=14){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();}
-  ctx.globalAlpha=1;
-  ctx.fillStyle='rgba(255,255,255,.06)';ctx.font='800 36px "Barlow Condensed",sans-serif';ctx.textAlign='center';ctx.fillText('EVORA',W/2,H/2-10);
-  ctx.font='600 11px "Barlow Condensed",sans-serif';ctx.fillStyle='rgba(178,34,34,.28)';ctx.fillText('GRATTA PER SCOPRIRE',W/2,H/2+18);
-  ctx.globalAlpha=.1;ctx.strokeStyle='#B22222';ctx.lineWidth=1;
-  ctx.beginPath();ctx.moveTo(40,H/2-28);ctx.lineTo(W-40,H/2-28);ctx.stroke();
-  ctx.beginPath();ctx.moveTo(40,H/2+32);ctx.lineTo(W-40,H/2+32);ctx.stroke();
-  ctx.globalAlpha=1;ctx.globalCompositeOperation='destination-out';
+
+  // ── Draw premium metallic surface ──────────────────────────────────────
+  function drawSurface(onDone){
+    const bg=ctx.createLinearGradient(0,0,W,H);
+    bg.addColorStop(0,'#1e1e1e');bg.addColorStop(0.35,'#252525');bg.addColorStop(0.7,'#1c1c1c');bg.addColorStop(1,'#161616');
+    ctx.fillStyle=bg;ctx.fillRect(0,0,W,H);
+    // Noise
+    for(let n=0;n<2200;n++){const nv=Math.floor(Math.random()*40);ctx.fillStyle=`rgba(${nv},${nv},${nv},0.055)`;ctx.fillRect(Math.random()*W,Math.random()*H,1,1);}
+    // Red diagonals
+    ctx.strokeStyle='rgba(200,30,30,0.30)';ctx.lineWidth=1.2;
+    for(let d=-H;d<W+H;d+=16){ctx.beginPath();ctx.moveTo(d,0);ctx.lineTo(d+H,H);ctx.stroke();}
+    // Scan lines
+    ctx.save();ctx.globalAlpha=0.018;ctx.strokeStyle='#fff';ctx.lineWidth=0.5;
+    for(let hy=0;hy<H;hy+=7){ctx.beginPath();ctx.moveTo(0,hy);ctx.lineTo(W,hy);ctx.stroke();}ctx.restore();
+    // Border
+    ctx.save();ctx.globalAlpha=0.85;ctx.strokeStyle='#cc2222';ctx.lineWidth=3;ctx.strokeRect(4,4,W-8,H-8);ctx.globalAlpha=0.20;ctx.lineWidth=1;ctx.strokeRect(10,10,W-20,H-20);ctx.restore();
+    // Corners
+    [[16,16,0],[W-16,16,Math.PI/2],[W-16,H-16,Math.PI],[16,H-16,-Math.PI/2]].forEach(([cx,cy,a])=>{
+      ctx.save();ctx.globalAlpha=0.30;ctx.strokeStyle='#cc2222';ctx.lineWidth=1.5;const L=11;
+      ctx.beginPath();ctx.moveTo(cx+Math.cos(a)*L,cy+Math.sin(a)*L);ctx.lineTo(cx,cy);ctx.lineTo(cx+Math.cos(a+Math.PI/2)*L,cy+Math.sin(a+Math.PI/2)*L);ctx.stroke();ctx.restore();
+    });
+    // Logo watermark
+    const img=new Image();
+    img.onload=()=>{
+      const tW=W*.76,tH=282.62*(tW/595.28),ox=(W-tW)/2,oy=(H-tH)/2;
+      ctx.save();ctx.globalAlpha=0.85;ctx.drawImage(img,ox,oy,tW,tH);ctx.restore();
+      ctx.save();ctx.globalAlpha=0.08;ctx.fillStyle='#cc2222';ctx.font='700 9px Barlow Condensed,sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText('GRATTA · SCOPRI · VINCI',W/2,oy+tH+14);ctx.restore();
+      ctx.globalCompositeOperation='destination-out';
+      // Reveal prize layer now that canvas covers it
+      const pbgEl=document.getElementById('pbg');if(pbgEl)pbgEl.style.opacity='1';
+      // Start shimmer with white logo as mask
+      maskImg.src='data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA1OTUuMjggMjgyLjYyIj48cGF0aCBmaWxsPSJ3aGl0ZSIgZD0iTTMxLjQ4LDk0LjIxaDcxLjA1djE4LjQ0SDUyLjA3djE5LjExaDQ0LjR2MTguNDNINTIuMDdWMTcwSDEwMy4ydjE4LjQ0SDMxLjQ4WiIvPjxwYXRoIGZpbGw9IndoaXRlIiBkPSJNMTI2LjI2LDkzLjg4aDIyLjg3bDI0LjYzLDY2LjM0LDI0LjYzLTY2LjM0aDIyLjMzbC0zOC4wOCw5NC44N2gtMTguM1oiLz48cGF0aCBmaWxsPSJ3aGl0ZSIgZD0iTTI0MCwxNDEuNTh2LS4yN2MwLTI2Ljc4LDIxLjEzLTQ4LjcxLDUwLjItNDguNzFzNDkuOTIsMjEuNjYsNDkuOTIsNDguNDR2LjI3QzM0MC4xNiwxNjguMDksMzE5LDE5MCwyOTAsMTkwUzI0MCwxNjguMzYsMjQwLDE0MS41OFptNzguNDYsMHYtLjI3YzAtMTYuMTUtMTEuODUtMjkuNi0yOC41My0yOS42UzI2MS43MSwxMjQuOSwyNjEuNzEsMTQxdi4yN2MwLDE2LjE1LDExLjg0LDI5LjYxLDI4LjUzLDI5LjYxUzMxOC41LDE1Ny43MywzMTguNSwxNDEuNThaIi8+PHBhdGggZmlsbD0id2hpdGUiIGQ9Ik0zNjcsOTQuMjFINDEwYzEyLDAsMjEuMTIsMy4yMywyNy40NSw5LjU2LDUuMzgsNS4zOCw4LjA3LDEyLjUxLDguMDcsMjEuNTN2LjI3YzAsMTUuMi04LjIxLDI0Ljc2LTIwLjE5LDI5LjJsMjMsMzMuNjRINDI0LjE0TDQwNCwxNTguMjdIMzg3LjY4djMwLjE0SDM2N1pNNDA4LjY3LDE0MGMxMC4yMywwLDE1Ljg4LTUuMjUsMTUuODgtMTMuMzN2LS4yNmMwLTktNi4wNi0xMy40Ni0xNi4yOC0xMy40NkgzODcuNjhWMTQwWiIvPjxwYXRoIGZpbGw9IndoaXRlIiBkPSJNNTEzLjg3LDExOC4xbC0yOC44LDcwLjY1SDQ2NGw0MC4zNy05NC44N2gxOS4xbDQwLjM3LDk0Ljg3SDU0Mi4xM0w1MTMuODcsMTE4LjEiLz48L3N2Zz4=';
+      if(onDone)onDone();
+    };
+    img.onerror=()=>{ctx.globalCompositeOperation='destination-out';const pbgEl=document.getElementById('pbg');if(pbgEl)pbgEl.style.opacity='1';if(onDone)onDone();};
+    img.src='data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA1OTUuMjggMjgyLjYyIj48cGF0aCBmaWxsPSIjY2MyMjIyIiBkPSJNMzEuNDgsOTQuMjFoNzEuMDV2MTguNDRINTIuMDd2MTkuMTFoNDQuNHYxOC40M0g1Mi4wN1YxNzBIMTAzLjJ2MTguNDRIMzEuNDhaIi8+PHBhdGggZmlsbD0iI2NjMjIyMiIgZD0iTTEyNi4yNiw5My44OGgyMi44N2wyNC42Myw2Ni4zNCwyNC42My02Ni4zNGgyMi4zM2wtMzguMDgsOTQuODdoLTE4LjNaIi8+PHBhdGggZmlsbD0iI2NjMjIyMiIgZD0iTTI0MCwxNDEuNTh2LS4yN2MwLTI2Ljc4LDIxLjEzLTQ4LjcxLDUwLjItNDguNzFzNDkuOTIsMjEuNjYsNDkuOTIsNDguNDR2LjI3QzM0MC4xNiwxNjguMDksMzE5LDE5MCwyOTAsMTkwUzI0MCwxNjguMzYsMjQwLDE0MS41OFptNzguNDYsMHYtLjI3YzAtMTYuMTUtMTEuODUtMjkuNi0yOC41My0yOS42UzI2MS43MSwxMjQuOSwyNjEuNzEsMTQxdi4yN2MwLDE2LjE1LDExLjg0LDI5LjYxLDI4LjUzLDI5LjYxUzMxOC41LDE1Ny43MywzMTguNSwxNDEuNThaIi8+PHBhdGggZmlsbD0iI2NjMjIyMiIgZD0iTTM2Nyw5NC4yMUg0MTBjMTIsMCwyMS4xMiwzLjIzLDI3LjQ1LDkuNTYsNS4zOCw1LjM4LDguMDcsMTIuNTEsOC4wNywyMS41M3YuMjdjMCwxNS4yLTguMjEsMjQuNzYtMjAuMTksMjkuMmwyMywzMy42NEg0MjQuMTRMNDA0LDE1OC4yN0gzODcuNjh2MzAuMTRIMzY3Wk00MDguNjcsMTQwYzEwLjIzLDAsMTUuODgtNS4yNSwxNS44OC0xMy4zM3YtLjI2YzAtOS02LjA2LTEzLjQ2LTE2LjI4LTEzLjQ2SDM4Ny42OFYxNDBaIi8+PHBhdGggZmlsbD0iI2NjMjIyMiIgZD0iTTUxMy44NywxMTguMWwtMjguOCw3MC42NUg0NjRsNDAuMzctOTQuODdoMTkuMWw0MC4zNyw5NC44N0g1NDIuMTNMNTEzLjg3LDExOC4xIi8+PC9zdmc+';
+  }
+
   let drw=false,lx=null,ly=null,rev=false;
+
+  // ── SHIMMER CANVAS — sovrapposto, rimosso al primo tocco ────────────────
+  const shimCv=document.createElement('canvas');
+  shimCv.width=W; shimCv.height=H;
+  shimCv.style.cssText='position:absolute;inset:0;z-index:3;pointer-events:none;width:100%;height:'+H+'px';
+  cv.parentElement.appendChild(shimCv);
+  const shimCtx=shimCv.getContext('2d');
+  let shimX=-W*0.6; // start position of shimmer band
+  let shimRaf=null;
+  let shimStopped=false;
+
+  // Pre-draw logo mask onto offscreen canvas for shimmer masking
+  const maskCv=document.createElement('canvas');
+  maskCv.width=W; maskCv.height=H;
+  const maskCtx=maskCv.getContext('2d');
+  const maskImg=new Image();
+  maskImg.onload=()=>{
+    const tW=W*.76,tH=282.62*(tW/595.28),ox=(W-tW)/2,oy=(H-tH)/2;
+    maskCtx.drawImage(maskImg,ox,oy,tW,tH);
+    startShimmer(ox,oy,tW,tH);
+  };
+  // Use same logo but white for mask
+  maskImg.src=cv.getAttribute('data-logo-src')||'';
+
+  function startShimmer(ox,oy,tW,tH){
+    const SPEED=1.8;
+    const BAND=W*0.55;
+    function loop(){
+      if(shimStopped)return;
+      shimCtx.clearRect(0,0,W,H);
+
+      // Draw shimmer band clipped to logo shape
+      shimCtx.save();
+      // Use the logo as clipping mask via drawImage + source-in
+      shimCtx.drawImage(maskCv,0,0);
+      shimCtx.globalCompositeOperation='source-in';
+
+      // Shimmer gradient — white light band moving across
+      const gx1=shimX, gx2=shimX+BAND;
+      const sg=shimCtx.createLinearGradient(gx1,0,gx2,0);
+      sg.addColorStop(0,   'rgba(255,255,255,0)');
+      sg.addColorStop(0.3, 'rgba(255,255,255,0)');
+      sg.addColorStop(0.45,'rgba(255,200,200,0.55)');
+      sg.addColorStop(0.5, 'rgba(255,255,255,0.85)');
+      sg.addColorStop(0.55,'rgba(255,200,200,0.55)');
+      sg.addColorStop(0.7, 'rgba(255,255,255,0)');
+      sg.addColorStop(1,   'rgba(255,255,255,0)');
+      shimCtx.fillStyle=sg;
+      shimCtx.fillRect(0,0,W,H);
+      shimCtx.restore();
+
+      shimX+=SPEED;
+      if(shimX>W*1.2) shimX=-W*0.6; // loop back
+      shimRaf=requestAnimationFrame(loop);
+    }
+    loop();
+  }
+
+  // Stop shimmer and remove overlay on first touch
+  function stopShimmer(){
+    if(shimStopped)return;
+    shimStopped=true;
+    if(shimRaf)cancelAnimationFrame(shimRaf);
+    shimCv.style.transition='opacity 0.3s';
+    shimCv.style.opacity='0';
+    setTimeout(()=>shimCv.remove(),350);
+  }
+
   const xy=e=>{const r=cv.getBoundingClientRect(),sx=W/r.width,sy=H/r.height,s=e.touches?e.touches[0]:e;return[(s.clientX-r.left)*sx,(s.clientY-r.top)*sy];};
   const sc=(x,y)=>{
-    const gr=ctx.createRadialGradient(x,y,0,x,y,40);gr.addColorStop(0,'rgba(0,0,0,1)');gr.addColorStop(.6,'rgba(0,0,0,.8)');gr.addColorStop(1,'rgba(0,0,0,0)');
-    ctx.fillStyle=gr;ctx.beginPath();ctx.arc(x,y,40,0,Math.PI*2);ctx.fill();
-    if(lx!==null){const dist=Math.hypot(x-lx,y-ly);if(dist>4){const st=Math.ceil(dist/8);for(let i=1;i<st;i++){const ix=lx+(x-lx)*(i/st),iy=ly+(y-ly)*(i/st);const g2=ctx.createRadialGradient(ix,iy,0,ix,iy,34);g2.addColorStop(0,'rgba(0,0,0,1)');g2.addColorStop(1,'rgba(0,0,0,0)');ctx.fillStyle=g2;ctx.beginPath();ctx.arc(ix,iy,34,0,Math.PI*2);ctx.fill();}}}
+    stopShimmer(); // stop shimmer on first touch
+    const brush=(bx,by,br)=>{const gr=ctx.createRadialGradient(bx,by,0,bx,by,br);gr.addColorStop(0,'rgba(0,0,0,1)');gr.addColorStop(0.55,'rgba(0,0,0,.9)');gr.addColorStop(1,'rgba(0,0,0,0)');ctx.fillStyle=gr;ctx.beginPath();ctx.arc(bx,by,br,0,Math.PI*2);ctx.fill();};
+    brush(x,y,40);
+    if(lx!==null){const dist=Math.hypot(x-lx,y-ly);if(dist>3){const st=Math.ceil(dist/5);for(let i=1;i<st;i++)brush(lx+(x-lx)*(i/st),ly+(y-ly)*(i/st),28);}}
     lx=x;ly=y;
-    if(navigator.vibrate)navigator.vibrate(8);
-    if(!rev){const d=ctx.getImageData(0,0,W,H).data;let c=0;for(let i=3;i<d.length;i+=4){if(d[i]<64)c++;}if(c/(W*H)>0.38){rev=true;ctx.clearRect(0,0,W,H);if(navigator.vibrate)navigator.vibrate([0,100,50,200]);setTimeout(()=>showResult(),400);}}
+    if(navigator.vibrate)navigator.vibrate(6);
+    if(!rev){const d=ctx.getImageData(0,0,W,H).data;let c2=0;for(let i=3;i<d.length;i+=4){if(d[i]<64)c2++;}const pct=c2/(W*H);if(pct>0.14)document.querySelector('.tdot:not(.r)')?.classList.add('r');if(pct>=0.38){rev=true;ctx.clearRect(0,0,W,H);if(navigator.vibrate)navigator.vibrate([0,60,30,120,30,200]);setTimeout(()=>showResult(),1200);}}
   };
-  cv.addEventListener('mousedown', e=>{drw=true;lx=null;ly=null;const[x,y]=xy(e);sc(x,y);});
-  cv.addEventListener('mousemove', e=>{if(!drw)return;const[x,y]=xy(e);sc(x,y);});
-  cv.addEventListener('mouseup',   ()=>{drw=false;lx=null;ly=null;});
-  cv.addEventListener('mouseleave',()=>{drw=false;lx=null;ly=null;});
-  cv.addEventListener('touchstart',e=>{e.preventDefault();drw=true;lx=null;ly=null;const[x,y]=xy(e);sc(x,y);},{passive:false});
-  cv.addEventListener('touchmove', e=>{e.preventDefault();if(!drw)return;const[x,y]=xy(e);sc(x,y);},{passive:false});
-  cv.addEventListener('touchend',  ()=>{drw=false;lx=null;ly=null;});
+  const enableScratch=()=>{
+    cv.addEventListener('mousedown', e=>{drw=true;lx=null;ly=null;const[x,y]=xy(e);sc(x,y);});
+    cv.addEventListener('mousemove', e=>{if(!drw)return;const[x,y]=xy(e);sc(x,y);});
+    cv.addEventListener('mouseup',   ()=>{drw=false;lx=null;ly=null;});
+    cv.addEventListener('mouseleave',()=>{drw=false;lx=null;ly=null;});
+    cv.addEventListener('touchstart',e=>{e.preventDefault();drw=true;lx=null;ly=null;const[x,y]=xy(e);sc(x,y);},{passive:false});
+    cv.addEventListener('touchmove', e=>{e.preventDefault();if(!drw)return;const[x,y]=xy(e);sc(x,y);},{passive:false});
+    cv.addEventListener('touchend',  ()=>{drw=false;lx=null;ly=null;});
+  };
+  drawSurface(enableScratch);
 }
 
 // ── PARTICLES ─────────────────────────────────────────────────────────────
