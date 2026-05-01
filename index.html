@@ -480,7 +480,7 @@
   <!-- WELCOME -->
   <div id="pg-welcome" class="page hidden">
     <div style="display:flex;align-items:center;justify-content:space-between;width:100%;margin-bottom:36px">
-      <img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA1OTUuMjggMjgyLjYyIj48cGF0aCBmaWxsPSIjZjBlZGU4IiBkPSJNMzEuNDgsOTQuMjFoNzEuMDV2MTguNDRINTIuMDd2MTkuMTFoNDQuNHYxOC40M0g1Mi4wN1YxNzBIMTAzLjJ2MTguNDRIMzEuNDhaIi8+PHBhdGggZmlsbD0iI2YwZWRlOCIgZD0iTTEyNi4yNiw5My44OGgyMi44N2wyNC42Myw2Ni4zNCwyNC42My02Ni4zNGgyMi4zM2wtMzguMDgsOTQuODdoLTE4LjNaIi8+PHBhdGggZmlsbD0iI2YwZWRlOCIgZD0iTTI0MCwxNDEuNTh2LS4yN2MwLTI2Ljc4LDIxLjEzLTQ4LjcxLDUwLjItNDguNzFzNDkuOTIsMjEuNjYsNDkuOTIsNDguNDR2LjI3QzM0MC4xNiwxNjguMDksMzE5LDE5MCwyOTAsMTkwUzI0MCwxNjguMzYsMjQwLDE0MS41OFptNzguNDYsMHYtLjI3YzAtMTYuMTUtMTEuODUtMjkuNi0yOC41My0yOS42UzI2MS43MSwxMjQuOSwyNjEuNzEsMTQxdi4yN2MwLDE2LjE1LDExLjg0LDI5LjYxLDI4LjUzLDI5LjYxUzMxOC41LDE1Ny43MywzMTguNSwxNDEuNThaIi8+PHBhdGggZmlsbD0iI2YwZWRlOCIgZD0iTTM2Nyw5NC4yMUg0MTBjMTIsMCwyMS4xMiwzLjIzLDI3LjQ1LDkuNTYsNS4zOCw1LjM4LDguMDcsMTIuNTEsOC4wNywyMS41M3YuMjdjMCwxNS4yLTguMjEsMjQuNzYtMjAuMTksMjkuMmwyMywzMy42NEg0MjQuMTRMNDA0LDE1OC4yN0gzODcuNjh2MzAuMTRIMzY3Wk00MDguNjcsMTQwYzEwLjIzLDAsMTUuODgtNS4yNSwxNS44OC0xMy4zM3YtLjI2YzAtOS02LjA2LTEzLjQ2LTE2LjI4LTEzLjQ2SDM4Ny42OFYxNDBaIi8+PHBhdGggZmlsbD0iI2YwZWRlOCIgZD0iTTUxMy44NywxMTguMWwtMjguOCw3MC42NUg0NjRsNDAuMzctOTQuODdoMTkuMWw0MC4zNyw5NC44N0g1NDIuMTNMNTEzLjg3LDExOC4xIi8+PC9zdmc+" alt="Evora" style="height:18px"/>
+      <img id="welcome-logo-tap" src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA1OTUuMjggMjgyLjYyIj48cGF0aCBmaWxsPSIjZjBlZGU4IiBkPSJNMzEuNDgsOTQuMjFoNzEuMDV2MTguNDRINTIuMDd2MTkuMTFoNDQuNHYxOC40M0g1Mi4wN1YxNzBIMTAzLjJ2MTguNDRIMzEuNDhaIi8+PHBhdGggZmlsbD0iI2YwZWRlOCIgZD0iTTEyNi4yNiw5My44OGgyMi44N2wyNC42Myw2Ni4zNCwyNC42My02Ni4zNGgyMi4zM2wtMzguMDgsOTQuODdoLTE4LjNaIi8+PHBhdGggZmlsbD0iI2YwZWRlOCIgZD0iTTI0MCwxNDEuNTh2LS4yN2MwLTI2Ljc4LDIxLjEzLTQ4LjcxLDUwLjItNDguNzFzNDkuOTIsMjEuNjYsNDkuOTIsNDguNDR2LjI3QzM0MC4xNiwxNjguMDksMzE5LDE5MCwyOTAsMTkwUzI0MCwxNjguMzYsMjQwLDE0MS41OFptNzguNDYsMHYtLjI3YzAtMTYuMTUtMTEuODUtMjkuNi0yOC41My0yOS42UzI2MS43MSwxMjQuOSwyNjEuNzEsMTQxdi4yN2MwLDE2LjE1LDExLjg0LDI5LjYxLDI4LjUzLDI5LjYxUzMxOC41LDE1Ny43MywzMTguNSwxNDEuNThaIi8+PHBhdGggZmlsbD0iI2YwZWRlOCIgZD0iTTM2Nyw5NC4yMUg0MTBjMTIsMCwyMS4xMiwzLjIzLDI3LjQ1LDkuNTYsNS4zOCw1LjM4LDguMDcsMTIuNTEsOC4wNywyMS41M3YuMjdjMCwxNS4yLTguMjEsMjQuNzYtMjAuMTksMjkuMmwyMywzMy42NEg0MjQuMTRMNDA0LDE1OC4yN0gzODcuNjh2MzAuMTRIMzY3Wk00MDguNjcsMTQwYzEwLjIzLDAsMTUuODgtNS4yNSwxNS44OC0xMy4zM3YtLjI2YzAtOS02LjA2LTEzLjQ2LTE2LjI4LTEzLjQ2SDM4Ny42OFYxNDBaIi8+PHBhdGggZmlsbD0iI2YwZWRlOCIgZD0iTTUxMy44NywxMTguMWwtMjguOCw3MC42NUg0NjRsNDAuMzctOTQuODdoMTkuMWw0MC4zNyw5NC44N0g1NDIuMTNMNTEzLjg3LDExOC4xIi8+PC9zdmc+" alt="Evora" style="height:18px;cursor:pointer;-webkit-tap-highlight-color:transparent" onclick="handleLogoTap()"/>
       <span style="font-family:var(--fd);font-size:8px;font-weight:700;letter-spacing:4px;color:var(--g2,#444);text-transform:uppercase;border:1px solid var(--b);padding:5px 10px">Fiera 2026</span>
     </div>
     <div class="wt">IL TUO<br><em>PREMIO</em><br>TI ASPETTA</div>
@@ -2099,7 +2099,52 @@ function generateRegulationHTMLString(){
 <h2>Art. 8 — Privacy</h2><p>Titolare: ${co.name||'[RAGIONE SOCIALE]'}. GDPR UE 2016/679. Contatto: ${co.email||'[EMAIL]'}.</p>
 <h2>Art. 9 — Foro Competente</h2><p>Foro: ${co.city||'[CITTÀ]'}. Normativa: D.P.R. 430/2001.</p>
 ${regSequences.map((seq,i)=>seq&&seq.length>0?`<div class="pb"><h2>ALLEGATO ${i+1} — GIORNO ${i+1}: ${regDays[i].date?fmtDate(regDays[i].date):'—'}</h2><p class="sm">Seed: ${makeSeed(i,evName)} | ${today} | ${seq.length} premi</p><table><tr><th style="width:60px">#</th><th>Premio</th><th style="width:120px">Valore €</th></tr>${seq.map((p,idx)=>`<tr><td>${idx+1}</td><td>${p.emoji||''} ${p.name}</td><td>€${parseFloat(p.value||0).toFixed(2)}</td></tr>`).join('')}</table></div>`:'').join('')}
-<div class="ft">— Fine del Regolamento — ${today} —</div></body></html>`;
+<div class="ft">— Fine del Regolamento — ${today} —</div>
+<!-- ── HIDDEN ACCESS MENU (5 taps on logo to reveal) ─────────────────────── -->
+<div id="access-menu" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);backdrop-filter:blur(8px);z-index:9999;align-items:center;justify-content:center;padding:24px" onclick="closeAccessMenu(event)">
+  <div style="background:#0f0f0f;border:1px solid #2a2a2a;padding:24px;max-width:320px;width:100%;position:relative" onclick="event.stopPropagation()">
+    <div style="position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent,#B22222,transparent)"></div>
+    <div style="font-family:'Barlow Condensed',sans-serif;font-size:10px;letter-spacing:5px;color:#666;text-transform:uppercase;text-align:center;margin-bottom:6px">Accesso Riservato</div>
+    <div style="font-family:'Barlow Condensed',sans-serif;font-size:22px;font-weight:800;letter-spacing:3px;text-align:center;color:#f0ede8;text-transform:uppercase;margin-bottom:20px">Gestione</div>
+    <button onclick="goToStaff()" style="width:100%;padding:14px;background:rgba(255,255,255,.04);border:1px solid #2a2a2a;color:#f0ede8;font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:700;letter-spacing:3px;text-transform:uppercase;cursor:pointer;margin-bottom:10px;transition:all .2s" onmouseover="this.style.borderColor='#B22222';this.style.background='rgba(178,34,34,.08)'" onmouseout="this.style.borderColor='#2a2a2a';this.style.background='rgba(255,255,255,.04)'">📦 Staff</button>
+    <button onclick="goToAdmin()" style="width:100%;padding:14px;background:rgba(255,255,255,.04);border:1px solid #2a2a2a;color:#f0ede8;font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:700;letter-spacing:3px;text-transform:uppercase;cursor:pointer;margin-bottom:14px;transition:all .2s" onmouseover="this.style.borderColor='#B22222';this.style.background='rgba(178,34,34,.08)'" onmouseout="this.style.borderColor='#2a2a2a';this.style.background='rgba(255,255,255,.04)'">⚙️ Admin</button>
+    <button onclick="closeAccessMenu()" style="width:100%;padding:10px;background:transparent;border:none;color:#555;font-family:'Barlow Condensed',sans-serif;font-size:11px;letter-spacing:3px;text-transform:uppercase;cursor:pointer">Annulla</button>
+  </div>
+</div>
+
+<script>
+// ── LOGO TAP HANDLER (5 rapid taps to open access menu) ──────────────────
+let logoTapCount = 0;
+let logoTapTimer = null;
+function handleLogoTap(){
+  logoTapCount++;
+  if(logoTapTimer) clearTimeout(logoTapTimer);
+  logoTapTimer = setTimeout(()=>{ logoTapCount = 0; }, 2000);
+  if(logoTapCount >= 5){
+    logoTapCount = 0;
+    if(navigator.vibrate) navigator.vibrate([20,40,40]);
+    document.getElementById('access-menu').style.display = 'flex';
+  }
+}
+function closeAccessMenu(e){
+  if(e && e.target.id !== 'access-menu' && e.type === 'click') return;
+  document.getElementById('access-menu').style.display = 'none';
+}
+function goToStaff(){
+  closeAccessMenu();
+  window.location.hash = '#staff';
+  showLoginStaff();
+}
+function goToAdmin(){
+  closeAccessMenu();
+  window.location.hash = '#admin';
+  showLoginAdmin();
+}
+// Close on Escape
+document.addEventListener('keydown', e=>{ if(e.key==='Escape') closeAccessMenu(); });
+</script>
+
+</body></html>`;
 }
 
 function downloadRegulationHTML(){
@@ -2142,5 +2187,50 @@ async function loadStats(){
   }catch(e){el.innerHTML='<div style="color:#ff6b6b;font-size:13px">Errore</div>';}
 }
 </script>
+
+<!-- ── HIDDEN ACCESS MENU (5 taps on logo to reveal) ─────────────────────── -->
+<div id="access-menu" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);backdrop-filter:blur(8px);z-index:9999;align-items:center;justify-content:center;padding:24px" onclick="closeAccessMenu(event)">
+  <div style="background:#0f0f0f;border:1px solid #2a2a2a;padding:24px;max-width:320px;width:100%;position:relative" onclick="event.stopPropagation()">
+    <div style="position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent,#B22222,transparent)"></div>
+    <div style="font-family:'Barlow Condensed',sans-serif;font-size:10px;letter-spacing:5px;color:#666;text-transform:uppercase;text-align:center;margin-bottom:6px">Accesso Riservato</div>
+    <div style="font-family:'Barlow Condensed',sans-serif;font-size:22px;font-weight:800;letter-spacing:3px;text-align:center;color:#f0ede8;text-transform:uppercase;margin-bottom:20px">Gestione</div>
+    <button onclick="goToStaff()" style="width:100%;padding:14px;background:rgba(255,255,255,.04);border:1px solid #2a2a2a;color:#f0ede8;font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:700;letter-spacing:3px;text-transform:uppercase;cursor:pointer;margin-bottom:10px;transition:all .2s" onmouseover="this.style.borderColor='#B22222';this.style.background='rgba(178,34,34,.08)'" onmouseout="this.style.borderColor='#2a2a2a';this.style.background='rgba(255,255,255,.04)'">📦 Staff</button>
+    <button onclick="goToAdmin()" style="width:100%;padding:14px;background:rgba(255,255,255,.04);border:1px solid #2a2a2a;color:#f0ede8;font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:700;letter-spacing:3px;text-transform:uppercase;cursor:pointer;margin-bottom:14px;transition:all .2s" onmouseover="this.style.borderColor='#B22222';this.style.background='rgba(178,34,34,.08)'" onmouseout="this.style.borderColor='#2a2a2a';this.style.background='rgba(255,255,255,.04)'">⚙️ Admin</button>
+    <button onclick="closeAccessMenu()" style="width:100%;padding:10px;background:transparent;border:none;color:#555;font-family:'Barlow Condensed',sans-serif;font-size:11px;letter-spacing:3px;text-transform:uppercase;cursor:pointer">Annulla</button>
+  </div>
+</div>
+
+<script>
+// ── LOGO TAP HANDLER (5 rapid taps to open access menu) ──────────────────
+let logoTapCount = 0;
+let logoTapTimer = null;
+function handleLogoTap(){
+  logoTapCount++;
+  if(logoTapTimer) clearTimeout(logoTapTimer);
+  logoTapTimer = setTimeout(()=>{ logoTapCount = 0; }, 2000);
+  if(logoTapCount >= 5){
+    logoTapCount = 0;
+    if(navigator.vibrate) navigator.vibrate([20,40,40]);
+    document.getElementById('access-menu').style.display = 'flex';
+  }
+}
+function closeAccessMenu(e){
+  if(e && e.target.id !== 'access-menu' && e.type === 'click') return;
+  document.getElementById('access-menu').style.display = 'none';
+}
+function goToStaff(){
+  closeAccessMenu();
+  window.location.hash = '#staff';
+  showLoginStaff();
+}
+function goToAdmin(){
+  closeAccessMenu();
+  window.location.hash = '#admin';
+  showLoginAdmin();
+}
+// Close on Escape
+document.addEventListener('keydown', e=>{ if(e.key==='Escape') closeAccessMenu(); });
+</script>
+
 </body>
 </html>
