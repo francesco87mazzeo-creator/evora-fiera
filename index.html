@@ -1735,6 +1735,23 @@ window.addEventListener('db-ready',async()=>{
 window._firebaseReady = false;
 window._loaderBarDone = false;
 
+// SAFETY: if Firebase doesn't respond in 15s, show app anyway with error
+setTimeout(()=>{
+  if(!window._firebaseReady){
+    console.error('[EVORA] Firebase timeout — showing app anyway');
+    window._firebaseReady = true;
+    if(window._loaderBarDone) showApp();
+  }
+}, 15000);
+
+// Catch any unhandled errors that might block init
+window.addEventListener('error', e=>{
+  console.error('[EVORA] Error:', e.message, 'at', e.filename+':'+e.lineno);
+});
+window.addEventListener('unhandledrejection', e=>{
+  console.error('[EVORA] Promise rejection:', e.reason);
+});
+
 function showApp(){
   const loader = document.getElementById('loader');
   loader.style.opacity = '0';
