@@ -67,7 +67,7 @@
             if(countToday<daySeq.length){
               const prize=daySeq[countToday];
               const code=`EVR-G${dayIndex+1}-${Math.random().toString(36).substring(2,6).toUpperCase()}`;
-              const asgn={id:primaryKey,userToken:token,userName:name,userEmail:email||token,deviceToken:token,prizeId:`day${dayIndex}_pos${countToday}`,prizeName:prize.name,prizeEmoji:prize.emoji||'🎁',prizeDesc:prize.name,prizeColor:'#B22222',code,status:"assigned",assignedAt:new Date().toISOString(),deliveredAt:null,dayIndex,seqPosition:countToday,isTest:testMode||false};
+              const asgn={id:primaryKey,userToken:token,userName:name,userEmail:email||token,deviceToken:token,prizeId:`day${dayIndex}_pos${countToday}`,prizeName:prize.name,prizeEmoji:prize.emoji||'🎁',prizeDesc:prize.name,prizeColor:'#B22222',code,status:"assigned",assignedAt:new Date().toISOString(),deliveredAt:null,dayIndex,seqPosition:countToday,isTest:testMode||false,ref:window._uRef||''};
               await setDoc(doc(db,"assignments",primaryKey),asgn);
               if(token&&token!==primaryKey)await setDoc(doc(db,"assignments",token),{_ref:primaryKey,userEmail:email,deviceToken:token,assignedAt:asgn.assignedAt});
               return asgn;
@@ -79,7 +79,7 @@
       const avail=snap.docs.map(d=>({id:d.id,...d.data()})).find(p=>p.assigned<p.qty);
       if(!avail)return null;
       const code=`EVR-${avail.id.toUpperCase()}-${Math.random().toString(36).substring(2,6).toUpperCase()}`;
-      const asgn={id:primaryKey,userToken:token,userName:name,userEmail:email||token,deviceToken:token,prizeId:avail.id,prizeName:avail.name,prizeEmoji:avail.emoji,prizeDesc:avail.desc||avail.name,prizeColor:avail.color,code,status:"assigned",assignedAt:new Date().toISOString(),deliveredAt:null,isTest:testMode||false};
+      const asgn={id:primaryKey,userToken:token,userName:name,userEmail:email||token,deviceToken:token,prizeId:avail.id,prizeName:avail.name,prizeEmoji:avail.emoji,prizeDesc:avail.desc||avail.name,prizeColor:avail.color,code,status:"assigned",assignedAt:new Date().toISOString(),deliveredAt:null,isTest:testMode||false,ref:window._uRef||''};
       await runTransaction(db,async tx=>{
         const pr=doc(db,"prizes",avail.id);const f=await tx.get(pr);
         if(f.data().assigned>=f.data().qty)throw new Error("exhausted");
@@ -630,13 +630,51 @@
 
   <!-- ADMIN -->
   <div id="pg-admin" class="hidden" style="width:100%;max-width:600px;padding:0 4px 60px;animation:fu .4s ease both">
+
+    <!-- HEADER -->
     <div class="adn">
       <button class="dbb" onclick="logoutAdmin()">← Esci</button>
       <div class="adt">ADMIN</div>
     </div>
 
+    <!-- ① STATISTICHE -->
     <div class="ads">
-      <div class="adst">PREMI</div>
+      <div class="adst">① STATISTICHE</div>
+      <div class="adss">Riepilogo evento in tempo reale.</div>
+      <div id="adstats"><div class="dld">Caricamento…</div></div>
+      <div class="abr"><button class="adbb o" onclick="loadStats()">↺ Aggiorna</button></div>
+    </div>
+
+    <!-- ② QR TRACKING -->
+    <div class="ads">
+      <div class="adst">② QR TRACKING</div>
+      <div class="adss">Crea link univoci da associare a QR code. Ogni link porta al form Shopify con un parametro di tracciamento. Le statistiche mostrano quante persone hanno giocato tramite ogni QR.</div>
+
+      <!-- Add new QR -->
+      <div style="display:flex;gap:8px;margin-bottom:16px">
+        <input class="adi" id="qr-new-name" placeholder="Es. Francesco, Hostess 1, Stand ingresso" style="flex:1"/>
+        <button class="adbb" onclick="addQRSource()" style="white-space:nowrap">+ Aggiungi</button>
+      </div>
+
+      <!-- QR list -->
+      <div id="qr-sources-list"><div class="dld">Caricamento…</div></div>
+
+      <!-- Stats panel (shown inline) -->
+      <div id="qr-stats-panel" style="display:none;margin-top:16px;padding:16px;background:#0a0a0a;border:1px solid var(--b)">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+          <div style="font-family:var(--fd);font-size:14px;font-weight:700;letter-spacing:2px" id="qr-stats-title"></div>
+          <button onclick="closeQRStats()" style="background:none;border:none;color:var(--g);cursor:pointer;font-size:18px">✕</button>
+        </div>
+        <div id="qr-stats-content"></div>
+      </div>
+
+      <div class="adsv" id="qr-msg"></div>
+      <div class="abr"><button class="adbb o" onclick="loadQRSources()">↺ Ricarica</button></div>
+    </div>
+
+    <!-- ③ PREMI -->
+    <div class="ads">
+      <div class="adst">③ PREMI</div>
       <div class="adss">Configura i premi con quantità totale e valore. La distribuzione nei 4 giorni si imposta nella sezione Regolamento.</div>
       <div class="prh"><span>Nome Premio</span><span style="text-align:center">Qtà totale</span><span>Valore €</span><span></span></div>
       <div id="pcfg"></div>
@@ -648,73 +686,7 @@
       <div class="adsv" id="psv"></div>
     </div>
 
-    <div class="ads">
-      <div class="adst">PASSWORD</div>
-      <div class="adss">Cambia le password di accesso.</div>
-      <div class="adf"><div class="adl">Nuova password Staff</div><input class="adi" type="text" id="nsp" placeholder="Lascia vuoto per non cambiare"/></div>
-      <div class="adf"><div class="adl">Nuova password Admin</div><input class="adi" type="text" id="nap" placeholder="Lascia vuoto per non cambiare"/></div>
-      <div class="abr"><button class="adbb" onclick="savePwds()">💾 Salva Password</button></div>
-      <div class="adsv" id="pwsv"></div>
-    </div>
-
-    <div class="ads">
-      <div class="adst">STATISTICHE</div>
-      <div class="adss">Riepilogo evento in tempo reale.</div>
-      <div id="adstats"><div class="dld">Caricamento…</div></div>
-      <div class="abr"><button class="adbb o" onclick="loadStats()">↺ Aggiorna</button></div>
-    </div>
-
-    <!-- RESET -->
-    <div class="ads" style="border-color:#3a1a1a">
-      <div class="adst" style="color:#ff6b6b">⚠ RESET COMPLETO</div>
-      <div class="adss">Cancella tutte le partite, i codici assegnati e azzera i contatori. I premi configurati restano. Usa solo prima di una nuova sessione di test o a inizio fiera.</div>
-      <div style="padding:14px;background:rgba(255,107,107,.06);border:1px solid rgba(255,107,107,.2);font-size:13px;color:#aaa;margin-bottom:16px;line-height:1.7">
-        ❌ Questa operazione è <strong style="color:var(--w)">irreversibile</strong>. Tutti i giocatori, premi assegnati e codici verranno eliminati.
-      </div>
-      <button id="reset-btn" class="adbb" style="background:#8b1a1a;width:100%" onclick="confirmReset()">🗑 RESET COMPLETO DATI</button>
-      <div class="adsv" id="reset-msg"></div>
-    </div>
-
-    <!-- TEST MODE -->
-    <div class="ads" style="border-color:#1a2a1a">
-      <div class="adst" style="color:#4ecdc4">🧪 MODALITÀ TEST</div>
-      <div class="adss">Usa queste opzioni per testare il gioco. <strong style="color:var(--w)">Disattiva tutto prima della fiera.</strong></div>
-
-      <!-- Toggle 1: Replay -->
-      <div style="display:flex;align-items:center;justify-content:space-between;padding:14px;background:#0a0a0a;border:1px solid var(--b);margin-bottom:10px">
-        <div style="flex:1;min-width:0;margin-right:12px">
-          <div style="font-family:var(--fd);font-size:14px;font-weight:700;letter-spacing:2px" id="tm-replay-label">RIGIOCO: BLOCCATO</div>
-          <div style="font-size:12px;color:var(--g);margin-top:3px" id="tm-replay-sub">Lo stesso contatto non può rigiocare</div>
-        </div>
-        <button id="tm-replay-btn" onclick="toggleTestReplay()"
-          style="padding:10px 18px;background:var(--b);color:var(--g);border:2px solid var(--b);font-family:var(--fd);font-size:13px;letter-spacing:2px;cursor:pointer;transition:all .2s;border-radius:2px;font-weight:700;white-space:nowrap;flex-shrink:0">
-          SBLOCCA
-        </button>
-      </div>
-
-      <!-- Toggle 2: Date -->
-      <div style="display:flex;align-items:center;justify-content:space-between;padding:14px;background:#0a0a0a;border:1px solid var(--b)">
-        <div style="flex:1;min-width:0;margin-right:12px">
-          <div style="font-family:var(--fd);font-size:14px;font-weight:700;letter-spacing:2px" id="tm-date-label">DATE: ATTIVO</div>
-          <div style="font-size:12px;color:var(--g);margin-top:3px" id="tm-date-sub">Il gioco funziona solo nelle date configurate</div>
-        </div>
-        <button id="tm-date-btn" onclick="toggleTestDate()"
-          style="padding:10px 18px;background:var(--b);color:var(--g);border:2px solid var(--b);font-family:var(--fd);font-size:13px;letter-spacing:2px;cursor:pointer;transition:all .2s;border-radius:2px;font-weight:700;white-space:nowrap;flex-shrink:0">
-          BYPASSA
-        </button>
-      </div>
-
-      <!-- Day selector — shown only when date test mode is ON -->
-      <div id="tm-day-selector" class="hidden" style="padding:14px;background:#0a0a0a;border:1px solid #1a3a1a;border-top:none">
-        <div style="font-family:var(--fd);font-size:10px;letter-spacing:3px;color:#4ecdc4;text-transform:uppercase;margin-bottom:10px">Simula giorno di fiera</div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap" id="tm-day-btns"></div>
-        <div style="font-size:11px;color:#555;margin-top:8px">Seleziona il giorno da simulare. Usa la logica reale dei premi.</div>
-      </div>
-
-      <div class="adsv" id="test-mode-msg"></div>
-    </div>
-
-    <!-- REGULATION -->
+    <!-- ④ REGOLAMENTO -->
     <div class="ads">
       <div class="adst">REGOLAMENTO</div>
       <div class="adss">Inserisci i dati azienda, configura i 4 giorni e genera le sequenze. I dati vengono salvati automaticamente su Firebase.</div>
@@ -789,6 +761,8 @@ const params=new URLSearchParams(window.location.search);
 const uName=params.get('name')||params.get('first_name')||'Ospite';
 const uEmail=params.get('email')||'';
 const uToken=params.get('token')||`demo_${Date.now()}`;
+const uRef=params.get('ref')||''; // QR tracking source
+window._uRef=uRef; // expose to Firebase module
 
 // ── REGULATION STATE ──────────────────────────────────────────────────────
 const DEFAULT_DATES=['2026-05-28','2026-05-29','2026-05-30','2026-05-31'];
@@ -826,7 +800,7 @@ function generateFingerprint(){
 // ── BOOT ──────────────────────────────────────────────────────────────────
 window.addEventListener('db-ready',async()=>{
   const uFingerprint=generateFingerprint();
-  cUser={token:uToken,name:uName,email:uEmail,fingerprint:uFingerprint};
+  cUser={token:uToken,name:uName,email:uEmail,fingerprint:uFingerprint,ref:uRef};
   try{const p=await window.DB.getConfig('passwords');if(p)PWD=p;}catch(e){}
   // Load test mode states
   try{const tm=await window.DB.getConfig('testMode');if(tm&&typeof tm==='object'){testModeReplay=!!tm.replay;testModeDate=!!tm.date;if(typeof tm.day==='number')selectedTestDay=tm.day;}}catch(e){}
@@ -1741,6 +1715,7 @@ async function showAdminPage(){
   await loadPrizes();
   await loadRegulationConfig();
   await loadStats();
+  await loadQRSources();
   updateTestModeUI(); // reflect current test mode state
 }
 async function loadPrizes(){try{admPrizes=await window.DB.getPrizes();renderPCfg();}catch(e){}}
@@ -2155,6 +2130,116 @@ async function loadStats(){
       <div class="dsc"><div class="dsn">${rem}</div><div class="dsl">Premi rimasti</div></div>
     </div>`;
   }catch(e){el.innerHTML='<div style="color:#ff6b6b;font-size:13px">Errore</div>';}
+}
+
+
+// ── QR TRACKING ───────────────────────────────────────────────────────────
+let qrSources = []; // loaded from Firestore
+
+async function loadQRSources(){
+  const el = document.getElementById('qr-sources-list');
+  if(el) el.innerHTML = '<div class="dld">Caricamento…</div>';
+  try{
+    const snap = await window.DB.getConfig('qr_sources');
+    qrSources = snap || [];
+    renderQRSources();
+  }catch(e){ if(el) el.innerHTML = '<div style="color:#f66">Errore caricamento</div>'; }
+}
+
+function renderQRSources(){
+  const el = document.getElementById('qr-sources-list');
+  if(!el) return;
+  if(!qrSources.length){
+    el.innerHTML = '<div style="color:var(--g);font-size:13px;padding:12px 0">Nessun QR creato. Aggiungine uno.</div>';
+    return;
+  }
+  const formUrl = 'https://evora-fitness.myshopify.com/pages/fiera-2026';
+  el.innerHTML = qrSources.map((src,i)=>`
+    <div style="background:#0a0a0a;border:1px solid var(--b);padding:14px;margin-bottom:8px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+        <div style="font-family:var(--fd);font-size:15px;font-weight:700;letter-spacing:2px">${src.name}</div>
+        <button onclick="deleteQRSource(${i})" style="background:none;border:none;color:#555;cursor:pointer;font-size:16px;padding:4px 8px">✕</button>
+      </div>
+      <div style="font-size:11px;color:var(--g);margin-bottom:10px;word-break:break-all">${formUrl}?ref=${encodeURIComponent(src.id)}</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button onclick="copyQRUrl('${src.id}')" style="padding:7px 14px;background:var(--b);border:none;color:var(--w);font-family:var(--fd);font-size:11px;letter-spacing:2px;cursor:pointer">COPIA URL</button>
+        <button onclick="showQRStats('${src.id}','${src.name}')" style="padding:7px 14px;background:var(--b);border:none;color:var(--w);font-family:var(--fd);font-size:11px;letter-spacing:2px;cursor:pointer">STATISTICHE</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+function copyQRUrl(id){
+  const formUrl = 'https://evora-fitness.myshopify.com/pages/fiera-2026';
+  const url = `${formUrl}?ref=${encodeURIComponent(id)}`;
+  if(navigator.clipboard) navigator.clipboard.writeText(url);
+  if(navigator.vibrate) navigator.vibrate(40);
+  showMsg('qr-msg','✓ URL copiato negli appunti','ok');
+}
+
+async function addQRSource(){
+  const nameEl = document.getElementById('qr-new-name');
+  const name = nameEl ? nameEl.value.trim() : '';
+  if(!name){ showMsg('qr-msg','Inserisci un nome','err'); return; }
+  const id = name.toLowerCase().replace(/[^a-z0-9]/g,'-').replace(/-+/g,'-');
+  if(qrSources.find(s=>s.id===id)){ showMsg('qr-msg','Nome già esistente','err'); return; }
+  qrSources.push({id, name, createdAt: new Date().toISOString()});
+  await window.DB.saveConfig('qr_sources', qrSources);
+  if(nameEl) nameEl.value = '';
+  renderQRSources();
+  showMsg('qr-msg','✓ QR aggiunto','ok');
+}
+
+async function deleteQRSource(i){
+  qrSources.splice(i,1);
+  await window.DB.saveConfig('qr_sources', qrSources);
+  renderQRSources();
+}
+
+async function showQRStats(id, name){
+  const el = document.getElementById('qr-stats-panel');
+  if(!el) return;
+  el.innerHTML = '<div class="dld">Caricamento statistiche…</div>';
+  el.style.display = 'block';
+  document.getElementById('qr-stats-title').textContent = name;
+  try{
+    const all = await window.DB.getAllAssignments();
+    const filtered = all.filter(a => !a._ref && (a.ref||'') === id);
+    const total = filtered.length;
+    const delivered = filtered.filter(a=>a.status==='delivered').length;
+    // Group by prize
+    const byPrize = {};
+    filtered.forEach(a=>{ byPrize[a.prizeName] = (byPrize[a.prizeName]||0)+1; });
+    document.getElementById('qr-stats-content').innerHTML = `
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:16px">
+        <div style="background:#0a0a0a;border:1px solid var(--b);padding:12px;text-align:center">
+          <div style="font-family:var(--fd);font-size:28px;font-weight:900;color:var(--w)">${total}</div>
+          <div style="font-size:10px;letter-spacing:2px;color:var(--g);margin-top:4px">GIOCATORI</div>
+        </div>
+        <div style="background:#0a0a0a;border:1px solid var(--b);padding:12px;text-align:center">
+          <div style="font-family:var(--fd);font-size:28px;font-weight:900;color:#4ecdc4">${delivered}</div>
+          <div style="font-size:10px;letter-spacing:2px;color:var(--g);margin-top:4px">RITIRATI</div>
+        </div>
+        <div style="background:#0a0a0a;border:1px solid var(--b);padding:12px;text-align:center">
+          <div style="font-family:var(--fd);font-size:28px;font-weight:900;color:var(--red)">${total>0?Math.round(delivered/total*100):0}%</div>
+          <div style="font-size:10px;letter-spacing:2px;color:var(--g);margin-top:4px">CONVERSIONE</div>
+        </div>
+      </div>
+      ${Object.keys(byPrize).length ? `
+        <div style="font-family:var(--fd);font-size:10px;letter-spacing:3px;color:var(--g);text-transform:uppercase;margin-bottom:8px">Premi assegnati</div>
+        ${Object.entries(byPrize).map(([p,n])=>`
+          <div style="display:flex;justify-content:space-between;padding:8px 12px;background:#0a0a0a;border:1px solid var(--b);margin-bottom:4px;font-size:13px">
+            <span>${p}</span><span style="font-weight:700">${n}</span>
+          </div>
+        `).join('')}
+      ` : '<div style="color:var(--g);font-size:13px">Nessun giocatore ancora.</div>'}
+    `;
+  }catch(e){ document.getElementById('qr-stats-content').innerHTML = '<div style="color:#f66">Errore nel caricamento</div>'; }
+}
+
+function closeQRStats(){
+  const el = document.getElementById('qr-stats-panel');
+  if(el) el.style.display='none';
 }
 
 // ── ACCESS MENU (5 logo taps) ─────────────────────────────────────────────
