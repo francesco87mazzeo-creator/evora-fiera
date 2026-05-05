@@ -1804,16 +1804,24 @@ window.addEventListener('unhandledrejection', e=>{
   tryStart();
 })();
 
+let _appShown = false;
 function showApp(){
+  if(_appShown) return;
+  _appShown = true;
   const loader = document.getElementById('loader');
+  if(!loader) return;
   loader.style.opacity = '0';
   setTimeout(()=>{
     loader.style.display = 'none';
     document.getElementById('app').style.display = 'flex';
-    const h = window.location.hash;
-    if(h==='#staff') showLoginStaff();
-    else if(h==='#admin') showLoginAdmin();
-    else showWelcome();
+    try{
+      const h = window.location.hash;
+      if(h==='#staff') showLoginStaff();
+      else if(h==='#admin') showLoginAdmin();
+      else showWelcome();
+    }catch(err){
+      console.error('[EVORA] showApp error:', err);
+    }
   }, 400);
 }
 
