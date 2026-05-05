@@ -1748,7 +1748,7 @@ function showApp(){
   }, 400);
 }
 
-(function startLoaderBar(){
+document.addEventListener('DOMContentLoaded', function startLoaderBar(){
   const loaderBar = document.getElementById('loader-bar');
   if(!loaderBar) return;
   let pct = 0;
@@ -1774,7 +1774,7 @@ function showApp(){
     // Stall at 70% if Firebase not ready yet
     loaderBar.style.width = Math.min(pct, 100) + '%';
   }, 60);
-})();
+});
 
 // ── PAGE NAV ──────────────────────────────────────────────────────────────
 // ── SMOOTH PAGE TRANSITIONS ──────────────────────────────────────────────
