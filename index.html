@@ -214,7 +214,13 @@
     }
     // Reset scans too
     window.DB={initPrizes,assignPrize,checkAlreadyPlayed,markDelivered,getAllAssignments,findByCode,getPrizes,savePrizes,listenAssignment,getConfig,saveConfig,resetAll,saveDaySequence,getDoc_,saveAssignmentPointer,getConfig_seq,saveScan,getAllScans};
-    await initPrizes();
+    console.log('[EVORA] Firebase init started');
+    try{
+      await initPrizes();
+      console.log('[EVORA] initPrizes OK, dispatching db-ready');
+    }catch(err){
+      console.error('[EVORA] initPrizes FAILED:', err);
+    }
     window.dispatchEvent(new Event("db-ready"));
   </script>
 
@@ -1063,7 +1069,13 @@
     }
     // Reset scans too
     window.DB={initPrizes,assignPrize,checkAlreadyPlayed,markDelivered,getAllAssignments,findByCode,getPrizes,savePrizes,listenAssignment,getConfig,saveConfig,resetAll,saveDaySequence,getDoc_,saveAssignmentPointer,getConfig_seq,saveScan,getAllScans};
-    await initPrizes();
+    console.log('[EVORA] Firebase init started');
+    try{
+      await initPrizes();
+      console.log('[EVORA] initPrizes OK, dispatching db-ready');
+    }catch(err){
+      console.error('[EVORA] initPrizes FAILED:', err);
+    }
     window.dispatchEvent(new Event("db-ready"));
   </script>
 
@@ -1636,6 +1648,12 @@
 // ── STATE ─────────────────────────────────────────────────────────────────
 let PWD={staff:'staff',admin:'admin'};
 let cUser=null,cAsgn=null,allAsgn=[],cFlt='all',cSrch='',pendId=null;
+// Initialize cUser immediately so showWelcome doesn't crash before db-ready
+function _initCUserEarly(){
+  if(!cUser){
+    cUser = {token:uToken, name:uName, email:uEmail, fingerprint:'pending', ref:uRef};
+  }
+}
 let scanStream=null,scanActive=false,rtUnsub=null,admPrizes=[];
 let testModeReplay=false;  // bypasses already-played block
 let testModeDate=false;    // bypasses date check
@@ -1647,6 +1665,7 @@ const uEmail=params.get('email')||'';
 const uToken=params.get('token')||`demo_${Date.now()}`;
 const uRef=params.get('ref')||''; // QR tracking source
 window._uRef=uRef; // expose to Firebase module
+_initCUserEarly();
 
 // ── REGULATION STATE ──────────────────────────────────────────────────────
 const DEFAULT_DATES=['2026-05-28','2026-05-29','2026-05-30','2026-05-31'];
@@ -1832,7 +1851,8 @@ function hideFooter(){document.getElementById('footer').classList.add('hidden');
 function showWelcome(){
   transitionTo('pg-welcome');stopCamera();
   if(rtUnsub){rtUnsub();rtUnsub=null;}
-  document.getElementById('uname').textContent=cUser.name;
+  const unameEl = document.getElementById('uname');
+  if(unameEl) unameEl.textContent = (cUser && cUser.name) || 'Ospite';
   show('pg-welcome');showFooter();
 }
 function goHome(){showWelcome();}
@@ -3052,6 +3072,198 @@ async function loadQRSources(){
     qrSources = snap || [];
     renderQRSources();
   }catch(e){ if(el) el.innerHTML = '<div style="color:#f66">Errore caricamento</div>'; }
+}
+
+// ── ADMIN CACHE & REFRESH SYSTEM ─────────────────────────────────────────
+let _dashCache = null;
+let _dashFilter = '';
+const DASH_FREE_REFRESHES = 5;
+
+function getDashRefreshState(){
+  const today = new Date().toISOString().slice(0,10);
+  try{
+    const raw = localStorage.getItem('evora_dash_refresh');
+    if(raw){
+      const s = JSON.parse(raw);
+      if(s.date === today) return s;
+    }
+  }catch(e){}
+  return {date:today, count:0};
+}
+
+function saveDashRefreshState(state){
+  try{ localStorage.setItem('evora_dash_refresh', JSON.stringify(state)); }catch(e){}
+}
+
+async function dashRefresh(force){
+  const state = getDashRefreshState();
+  const remaining = DASH_FREE_REFRESHES - state.count;
+  const btn = document.getElementById('dash-refresh-btn');
+
+  if(!force && remaining <= 0){
+    if(btn && btn.dataset.confirm === '1'){
+      btn.dataset.confirm = '0';
+    } else if(btn) {
+      btn.dataset.confirm = '1';
+      btn.style.background = '#8b1a1a';
+      btn.innerHTML = '⚠ CLICCA ANCORA PER CONFERMARE';
+      setTimeout(()=>{
+        if(btn) {
+          btn.dataset.confirm = '0';
+          btn.style.background = 'var(--red)';
+          updateDashRefreshBtn();
+        }
+      }, 3000);
+      return;
+    }
+  }
+
+  if(btn) btn.innerHTML = '⏳ Caricamento…';
+
+  try{
+    const [assignments, scans, prizes] = await Promise.all([
+      window.DB.getAllAssignments(),
+      window.DB.getAllScans ? window.DB.getAllScans() : Promise.resolve([]),
+      window.DB.getPrizes()
+    ]);
+    _dashCache = {assignments, scans, prizes, loadedAt: new Date()};
+
+    state.count++;
+    state.date = new Date().toISOString().slice(0,10);
+    saveDashRefreshState(state);
+
+    renderDashboard();
+    renderDashChips();
+  }catch(e){
+    console.error('dashRefresh error:', e);
+    if(btn) btn.innerHTML = '↺ AGGIORNA';
+  }
+}
+
+function updateDashRefreshBtn(){
+  const state = getDashRefreshState();
+  const remaining = Math.max(0, DASH_FREE_REFRESHES - state.count);
+  const btn = document.getElementById('dash-refresh-btn');
+  if(!btn) return;
+  if(remaining > 0){
+    btn.innerHTML = `↺ AGGIORNA <span style="opacity:.7;font-size:10px">(${remaining} rimast${remaining===1?'o':'i'})</span>`;
+    btn.style.background = 'var(--red)';
+  } else {
+    btn.innerHTML = `↺ AGGIORNA <span style="opacity:.7;font-size:10px">(0 rimasti)</span>`;
+    btn.style.background = '#555';
+  }
+  const lu = document.getElementById('dash-last-update');
+  if(lu && _dashCache){
+    lu.textContent = _dashCache.loadedAt.toLocaleTimeString('it-IT',{hour:'2-digit',minute:'2-digit'});
+  }
+}
+
+function setDashFilter(ref){
+  _dashFilter = ref;
+  document.querySelectorAll('.qr-chip').forEach(c=>{
+    c.classList.toggle('active', c.dataset.ref === ref);
+  });
+  renderDashboard();
+}
+
+function renderDashChips(){
+  const container = document.getElementById('dash-qr-chips');
+  if(!container) return;
+  const sources = (qrSources || []).filter(s=>s && s.id);
+  const chips = [{id:'',name:'TOTALE'}, ...sources.map(s=>({id:s.id, name:s.name||s.id}))];
+  container.innerHTML = chips.map(s=>
+    `<button class="qr-chip${_dashFilter===s.id?' active':''}" data-ref="${s.id}" onclick="setDashFilter('${s.id}')">${s.name}</button>`
+  ).join('');
+}
+
+function renderDashboard(){
+  if(!_dashCache) return;
+  updateDashRefreshBtn();
+
+  const {assignments, scans, prizes} = _dashCache;
+  const ref = _dashFilter;
+
+  const realAsgn = (assignments||[]).filter(a => a && !a._ref);
+  const filtAsgn = ref ? realAsgn.filter(a=>(a.ref||'')===ref) : realAsgn;
+  const filtScans = ref ? (scans||[]).filter(s=>s && s.ref===ref) : (scans||[]);
+
+  const total_scans = filtScans.length;
+  const total_played = filtAsgn.length;
+  const total_delivered = filtAsgn.filter(a=>a.status==='delivered').length;
+  const total_assigned = filtAsgn.length;
+
+  const setText = (id, val) => { const el = document.getElementById(id); if(el) el.textContent = val; };
+  setText('dc-scans', total_scans || '—');
+  setText('dc-played', total_played);
+  setText('dc-assigned', total_assigned);
+  setText('dc-delivered', total_delivered);
+
+  const funnel = document.getElementById('dash-funnel');
+  if(funnel){
+    const maxVal = Math.max(total_scans, total_played, 1);
+    const steps = [
+      {label:'SCANSIONI', val:total_scans, prev:null},
+      {label:'GIOCATE', val:total_played, prev:total_scans},
+      {label:'ASSEGNATI', val:total_assigned, prev:total_played},
+      {label:'CONSEGNATI', val:total_delivered, prev:total_assigned}
+    ];
+    funnel.innerHTML = steps.map(s=>{
+      const pct = maxVal > 0 ? Math.round(s.val/maxVal*100) : 0;
+      const drop = s.prev !== null && s.prev > 0 ? s.prev - s.val : null;
+      return `<div class="funnel-row">
+        <div class="funnel-label">
+          <span class="funnel-lbl-name">${s.label}</span>
+          <span style="display:flex;gap:8px;align-items:center">
+            ${drop !== null && drop > 0 ? `<span class="funnel-lbl-drop">-${drop}</span>` : ''}
+            <span class="funnel-lbl-num">${s.val}</span>
+          </span>
+        </div>
+        <div class="funnel-track"><div class="funnel-fill" style="width:${pct}%"></div></div>
+      </div>`;
+    }).join('');
+  }
+
+  const prizeEl = document.getElementById('dash-prizes');
+  if(prizeEl){
+    const byPrize = {};
+    filtAsgn.forEach(a=>{
+      const name = a.prizeName || 'Sconosciuto';
+      if(!byPrize[name]) byPrize[name] = {total:0, delivered:0};
+      byPrize[name].total++;
+      if(a.status==='delivered') byPrize[name].delivered++;
+    });
+    if(Object.keys(byPrize).length === 0){
+      prizeEl.innerHTML = '<div style="color:var(--g);font-size:13px">Nessun premio assegnato ancora.</div>';
+    } else {
+      prizeEl.innerHTML = Object.entries(byPrize).map(([name,data])=>{
+        const prize = (prizes||[]).find(p=>p.name===name);
+        const qty = prize ? prize.qty : data.total;
+        const pct = qty > 0 ? Math.round(data.total/qty*100) : 100;
+        const exhausted = prize && prize.assigned >= prize.qty;
+        return `<div style="margin-bottom:12px">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+            <span style="font-size:13px">${name}</span>
+            <span style="display:flex;gap:8px;align-items:center">
+              <span style="font-size:11px;color:var(--g)">${data.delivered}/${data.total} ritirati</span>
+              <span style="font-family:var(--fd);font-size:12px;font-weight:700">${data.total}/${qty}</span>
+              ${exhausted ? '<span style="font-size:9px;background:rgba(255,107,107,.2);color:#ff6b6b;padding:2px 6px;letter-spacing:1px">ESAURITO</span>' : ''}
+            </span>
+          </div>
+          <div class="funnel-track"><div class="funnel-fill" style="width:${pct}%;background:linear-gradient(90deg,var(--red),#cc3333)"></div></div>
+        </div>`;
+      }).join('');
+    }
+  }
+}
+
+// ── ADMIN TAB SWITCHING ───────────────────────────────────────────────────
+function switchAdminTab(tab){
+  document.querySelectorAll('.adm-tab').forEach(t=>t.classList.toggle('active', t.dataset.tab===tab));
+  document.querySelectorAll('.adm-tab-content').forEach(p=>p.classList.add('hidden'));
+  const panel = document.getElementById('adm-tab-'+tab);
+  if(panel) panel.classList.remove('hidden');
+  if(tab==='dash' && !_dashCache) dashRefresh(true);
+  if(tab==='qr' && (!qrSources || !qrSources.length)) loadQRSources();
 }
 
 function renderQRSources(){
