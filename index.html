@@ -9,7 +9,7 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-    import { getFirestore,doc,getDoc,setDoc,updateDoc,deleteDoc,collection,getDocs,query,orderBy,where,runTransaction,onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+    import { getFirestore,doc,getDoc,setDoc,updateDoc,deleteDoc,collection,getDocs,query,orderBy,where,runTransaction,onSnapshot,increment } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
     const db = getFirestore(initializeApp({
       apiKey:"AIzaSyBeHgXy0V1YqIWP8HruIZ4rztIaNfXsUxk",
       authDomain:"evora-fiera.firebaseapp.com",
@@ -213,7 +213,19 @@
       return s.docs.map(d=>d.data());
     }
     // Reset scans too
-    window.DB={initPrizes,assignPrize,checkAlreadyPlayed,markDelivered,getAllAssignments,findByCode,getPrizes,savePrizes,listenAssignment,getConfig,saveConfig,resetAll,saveDaySequence,getDoc_,saveAssignmentPointer,getConfig_seq,saveScan,getAllScans};
+        async function getDailyStats(){
+      const snap = await getDoc(doc(db,"config","daily_stats"));
+      return snap.exists() ? snap.data() : {};
+    }
+    async function lookupCode(code){
+      // Staff lookup: find by code field — 1 query only
+      const snap = await getDocs(query(collection(db,"assignments"),where("code","==",code)));
+      if(snap.empty) return null;
+      const d = snap.docs[0].data();
+      if(d._ref) return null; // skip pointers
+      return d;
+    }
+    window.DB={initPrizes,assignPrize,checkAlreadyPlayed,markDelivered,getAllAssignments,findByCode,getPrizes,savePrizes,listenAssignment,getConfig,saveConfig,resetAll,saveDaySequence,getDoc_,saveAssignmentPointer,getConfig_seq,saveScan,getAllScans,getDailyStats,lookupCode};
     console.log('[EVORA] Firebase init started');
     try{
       await initPrizes();
@@ -634,37 +646,33 @@
 
   <!-- STAFF -->
   <div id="pg-staff" class="hidden" style="width:100%;max-width:600px;padding:0 4px 60px">
-    <div id="sv-list">
-      <div class="dn">
-        <button class="dbb" onclick="logoutStaff()">← Esci</button>
-        <div class="dt">STAFF</div>
-        <button class="dsb" onclick="showScan()">📷 SCAN</button>
-      </div>
-      <div class="dstat">
-        <div class="dsc"><div class="dsn" id="s-tot">0</div><div class="dsl">Giocatori</div></div>
-        <div class="dsc"><div class="dsn" id="s-pen" style="color:var(--red)">0</div><div class="dsl">Da consegnare</div></div>
-        <div class="dsc"><div class="dsn" id="s-del">0</div><div class="dsl">Consegnati</div></div>
-        <div class="dsc"><div class="dsn" id="s-rem">0</div><div class="dsl">Premi rimasti</div></div>
-      </div>
-      <input class="dsrch" placeholder="Cerca nome, email, premio, codice…" oninput="fltList(this.value)"/>
-      <div class="dflt">
-        <button class="dfb active" onclick="setFlt('all',this)">Tutti</button>
-        <button class="dfb" onclick="setFlt('pending',this)">⏳ Da consegnare</button>
-        <button class="dfb" onclick="setFlt('delivered',this)">✓ Consegnati</button>
-      </div>
-      <div id="alist"><div class="dld">Caricamento…</div></div>
+    <!-- Staff header -->
+    <div class="dn">
+      <button class="dbb" onclick="logoutStaff()">← Esci</button>
+      <div class="dt">STAFF</div>
+      <div style="width:60px"></div>
     </div>
-    <div id="sv-scan" class="hidden scw" style="max-width:100%">
-      <div class="scn">
-        <button class="bb" id="scn-back-btn" onclick="showList()">← Lista premi</button>
-        <div class="sct">SCANNER</div>
+
+    <!-- Scanner area -->
+    <div style="padding:16px">
+      <div style="font-family:var(--fd);font-size:10px;letter-spacing:3px;color:var(--g);text-transform:uppercase;margin-bottom:12px">Scansiona o inserisci codice premio</div>
+
+      <!-- Camera scanner -->
+      <div id="sv-scan" style="margin-bottom:16px">
+        <div class="svw" style="position:relative;background:#000;border:1px solid var(--b);margin-bottom:12px">
+          <video id="scvid" playsinline muted style="width:100%;display:block"></video>
+          <div class="sfo"><div class="srect"><div class="scbr"></div><div class="scbl"></div><div class="scln"></div></div></div>
+        </div>
+        <div id="scerr" style="margin-bottom:8px"></div>
       </div>
-      <div class="svw"><video id="scvid" playsinline muted></video>
-        <div class="sfo"><div class="srect"><div class="scbr"></div><div class="scbl"></div><div class="scln"></div></div></div>
+
+      <!-- Manual input -->
+      <div style="display:flex;gap:8px;margin-bottom:20px">
+        <input class="smi" placeholder="EVR-P1-XXXX" id="smin" style="flex:1;font-size:16px" oninput="hdlMan(this.value)"/>
+        <button onclick="triggerStaffScan()" style="padding:12px 16px;background:var(--red);border:none;color:var(--w);font-family:var(--fd);font-size:20px;cursor:pointer">📷</button>
       </div>
-      <div id="scerr"></div>
-      <div class="sml">Oppure inserisci il codice manualmente:</div>
-      <input class="smi" placeholder="EVR-P1-XXXX" id="smin" oninput="hdlMan(this.value)"/>
+
+      <!-- Result card -->
       <div id="scres"></div>
     </div>
   </div>
@@ -677,7 +685,8 @@
       <div style="width:60px"></div>
     </div>
     <div id="admin-tabs" style="display:flex;overflow-x:auto;border-bottom:1px solid var(--b);background:var(--bg);position:sticky;top:53px;z-index:9">
-      <button class="adm-tab active" data-tab="dash" onclick="switchAdminTab('dash')">📊 Dashboard</button>
+      <button class="adm-tab active" data-tab="quick" onclick="switchAdminTab('quick')">⚡ Oggi</button>
+      <button class="adm-tab" data-tab="dash" onclick="switchAdminTab('dash')">📊 Analisi</button>
       <button class="adm-tab" data-tab="qr" onclick="switchAdminTab('qr')">🔗 QR</button>
       <button class="adm-tab" data-tab="prizes" onclick="switchAdminTab('prizes')">🎁 Premi</button>
       <button class="adm-tab" data-tab="reg" onclick="switchAdminTab('reg')">📋 Regolamento</button>
@@ -685,7 +694,33 @@
       <button class="adm-tab" data-tab="test" onclick="switchAdminTab('test')">🧪 Test</button>
       <button class="adm-tab" data-tab="reset" onclick="switchAdminTab('reset')" style="color:#ff6b6b">⚠ Reset</button>
     </div>
-    <div id="adm-tab-dash" class="adm-tab-content" style="padding:16px">
+    <!-- ⚡ QUICK STATS (fiera live) -->
+    <div id="adm-tab-quick" class="adm-tab-content" style="padding:16px">
+      <div style="font-family:var(--fd);font-size:10px;letter-spacing:3px;color:var(--g);text-transform:uppercase;margin-bottom:8px">Giocate per giorno</div>
+      <div class="adss" style="margin-bottom:20px">1 lettura Firestore per aggiornamento. Usa durante la fiera per controllare l'andamento.</div>
+
+      <!-- Today big number -->
+      <div style="background:var(--s);border:1px solid var(--b);padding:24px;text-align:center;margin-bottom:16px">
+        <div style="font-family:var(--fd);font-size:10px;letter-spacing:3px;color:var(--g);text-transform:uppercase;margin-bottom:8px">OGGI</div>
+        <div id="qs-today" style="font-family:var(--fd);font-size:72px;font-weight:900;color:var(--w);line-height:1">—</div>
+        <div style="font-family:var(--fd);font-size:10px;letter-spacing:3px;color:var(--g);text-transform:uppercase;margin-top:8px">GIOCATE</div>
+      </div>
+
+      <!-- All days breakdown -->
+      <div id="qs-days" style="margin-bottom:20px"></div>
+
+      <!-- Last update + refresh -->
+      <div style="display:flex;align-items:center;justify-content:space-between">
+        <div style="font-size:12px;color:var(--g)" id="qs-last-update">Non ancora aggiornato</div>
+        <button onclick="quickStatsRefresh()" style="padding:10px 20px;background:var(--red);border:none;color:var(--w);font-family:var(--fd);font-size:12px;font-weight:700;letter-spacing:2px;cursor:pointer">↺ AGGIORNA</button>
+      </div>
+    </div>
+
+    <!-- 📊 DASHBOARD (analisi post-fiera) -->
+    <div id="adm-tab-dash" class="adm-tab-content hidden" style="padding:16px">
+      <div class="adss" style="background:rgba(78,205,196,.06);border:1px solid rgba(78,205,196,.2);padding:12px;margin-bottom:16px;color:#4ecdc4;font-size:12px">
+        💡 Analisi completa — ideale dopo la fiera. Ogni aggiornamento legge tutti i dati da Firestore.
+      </div>
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
         <div><div style="font-family:var(--fd);font-size:10px;letter-spacing:3px;color:var(--g);text-transform:uppercase">Ultimo aggiornamento</div><div style="font-size:12px;color:var(--w);margin-top:2px" id="dash-last-update">—</div></div>
         <button id="dash-refresh-btn" onclick="dashRefresh()" style="display:flex;align-items:center;gap:6px;padding:10px 16px;background:var(--red);border:none;color:var(--w);font-family:var(--fd);font-size:12px;font-weight:700;letter-spacing:2px;cursor:pointer">↺ AGGIORNA</button>
@@ -1689,64 +1724,81 @@ function fireParticles(){
 // ── STAFF ─────────────────────────────────────────────────────────────────
 async function showStaff(){
   hideAll();hideFooter();
-  const e=document.getElementById('pg-staff');e.classList.remove('hidden');e.style.display='block';
-  document.getElementById('sv-list').classList.remove('hidden');
-  document.getElementById('sv-scan').classList.add('hidden');
-  await reloadDash();
+  const e=document.getElementById('pg-staff');
+  e.classList.remove('hidden');e.style.display='block';
+  // Start camera immediately
+  scanActive=true;
+  startCam();
 }
-async function reloadDash(){
-  document.getElementById('alist').innerHTML='<div class="dld">Caricamento…</div>';
+
+// Staff result rendering after code lookup
+function renderStaffResult(asgn){
+  const el = document.getElementById('scres');
+  if(!asgn){
+    el.innerHTML = `<div style="background:#1a0a0a;border:2px solid #ff6b6b;padding:20px;text-align:center">
+      <div style="font-size:32px;margin-bottom:8px">❌</div>
+      <div style="font-family:var(--fd);font-size:14px;font-weight:700;letter-spacing:3px;color:#ff6b6b">CODICE NON VALIDO</div>
+      <div style="font-size:12px;color:var(--g);margin-top:6px">Codice non trovato o già scaduto</div>
+    </div>`;
+    return;
+  }
+  const delivered = asgn.status === 'delivered';
+  el.innerHTML = `<div style="background:var(--s);border:2px solid ${delivered?'#4ecdc4':'var(--red)'};padding:20px">
+    <div style="text-align:center;margin-bottom:16px">
+      <div style="font-size:48px">${asgn.prizeEmoji||'🎁'}</div>
+      <div style="font-family:var(--fd);font-size:20px;font-weight:900;color:var(--w);margin-top:8px">${asgn.prizeName}</div>
+      <div style="font-size:13px;color:var(--g);margin-top:4px">${asgn.userName||asgn.userEmail||'—'}</div>
+      <div style="font-family:var(--fd);font-size:11px;color:var(--red);letter-spacing:3px;margin-top:6px">${asgn.code}</div>
+    </div>
+    ${delivered
+      ? `<div style="background:rgba(78,205,196,.1);border:1px solid rgba(78,205,196,.3);padding:12px;text-align:center;font-family:var(--fd);font-size:12px;letter-spacing:3px;color:#4ecdc4">✓ PREMIO GIÀ RITIRATO<br><span style="font-size:10px;color:var(--g);font-weight:400">${asgn.deliveredAt?new Date(asgn.deliveredAt).toLocaleString('it-IT'):'—'}</span></div>`
+      : `<button onclick="confirmStaffDelivery('${asgn.id}')" style="width:100%;padding:16px;background:var(--red);border:none;color:var(--w);font-family:var(--fd);font-size:14px;font-weight:700;letter-spacing:3px;cursor:pointer;margin-top:4px">✓ CONFERMA CONSEGNA</button>`
+    }
+  </div>`;
+}
+
+async function confirmStaffDelivery(id){
+  const btn = document.querySelector('#scres button');
+  if(btn){ btn.disabled=true; btn.textContent='⏳ Salvataggio…'; }
   try{
-    allAsgn=await window.DB.getAllAssignments();
-    const prizes=await window.DB.getPrizes();
-    const del=allAsgn.filter(a=>a.status==='delivered').length;
-    const rem=prizes.reduce((s,p)=>s+Math.max(0,p.qty-p.assigned),0);
-    document.getElementById('s-tot').textContent=allAsgn.length;
-    document.getElementById('s-pen').textContent=allAsgn.length-del;
-    document.getElementById('s-del').textContent=del;
-    document.getElementById('s-rem').textContent=rem;
-    renderList();
-  }catch(e){document.getElementById('alist').innerHTML='<div class="demp">Errore connessione</div>';}
+    await window.DB.markDelivered(id);
+    if(navigator.vibrate) navigator.vibrate([50,100,50]);
+    // Refresh result to show delivered state
+    const updated = await window.DB.lookupCode(document.getElementById('smin').value || _lastScannedCode || '');
+    if(updated) renderStaffResult(updated);
+    else{
+      document.getElementById('scres').innerHTML = `<div style="background:rgba(78,205,196,.1);border:2px solid #4ecdc4;padding:20px;text-align:center">
+        <div style="font-size:32px">✅</div>
+        <div style="font-family:var(--fd);font-size:14px;font-weight:700;letter-spacing:3px;color:#4ecdc4;margin-top:8px">PREMIO CONSEGNATO</div>
+      </div>`;
+    }
+  }catch(e){
+    if(btn){ btn.disabled=false; btn.textContent='✓ CONFERMA CONSEGNA'; }
+    document.getElementById('scres').innerHTML += '<div style="color:#ff6b6b;font-size:12px;margin-top:8px">Errore. Riprova.</div>';
+  }
 }
-function setFlt(f,btn){cFlt=f;document.querySelectorAll('.dfb').forEach(b=>b.classList.remove('active'));btn.classList.add('active');renderList();}
-function fltList(q){cSrch=q.toLowerCase();renderList();}
-function renderList(){
-  const list=document.getElementById('alist');
-  let f=allAsgn.filter(a=>{
-    if(cFlt==='pending'&&a.status!=='assigned')return false;
-    if(cFlt==='delivered'&&a.status!=='delivered')return false;
-    if(!cSrch)return true;
-    return[a.userName,a.userEmail,a.prizeName,a.code].some(v=>v?.toLowerCase().includes(cSrch));
-  });
-  if(!f.length){list.innerHTML='<div class="demp">NESSUN RISULTATO</div>';return;}
-  list.innerHTML=f.map(a=>`<div class="ac ${a.status==='delivered'?'done':''}">
-    <div class="ae">${a.prizeEmoji}</div>
-    <div class="ai"><div class="an">${a.userName||a.userEmail||'—'}</div><div class="ap">${a.prizeName}</div><div class="acd">${a.code}</div></div>
-    <div style="display:flex;flex-direction:column;align-items:flex-end;gap:8px">
-      <span class="abg ${a.status==='delivered'?'bad':'bap'}">${a.status==='delivered'?'✓ FATTO':'IN ATTESA'}</span>
-      <button class="abt" ${a.status==='delivered'?'disabled':''} onclick="openModal('${a.id}')">
-        ${a.status==='delivered'?'✓':'CONSEGNA'}
-      </button>
-    </div></div>`).join('');
-}
-function openModal(id){
-  const a=allAsgn.find(x=>x.id===id);if(!a)return;pendId=id;
-  document.getElementById('mbody').innerHTML=`Consegnare:<br><br><strong style="font-size:17px;color:var(--w)">${a.prizeEmoji} ${a.prizeName}</strong><br>a <strong style="color:var(--w)">${a.userName||a.userEmail}</strong><br><br>Codice: <code style="color:var(--red);letter-spacing:2px">${a.code}</code><br><br><span style="color:#555;font-size:12px">⚠ Azione irreversibile.</span>`;
-  document.getElementById('cmodal').classList.remove('hidden');
-}
+
+let _lastScannedCode = '';
+
+function openModal(id){} // kept for compatibility
 function closeModal(){document.getElementById('cmodal').classList.add('hidden');pendId=null;}
-async function confirmDel(){if(!pendId)return;await window.DB.markDelivered(pendId);closeModal();await reloadDash();if(navigator.vibrate)navigator.vibrate([50,100,50]);}
+async function confirmDel(){if(!pendId)return;await window.DB.markDelivered(pendId);closeModal();if(navigator.vibrate)navigator.vibrate([50,100,50]);}
+
+function triggerStaffScan(){
+  scanActive=true;
+  startCam();
+}
 
 // ── SCANNER ───────────────────────────────────────────────────────────────
 function showScan(){
-  document.getElementById('sv-list').classList.add('hidden');
+  // sv-list removed
   document.getElementById('sv-scan').classList.remove('hidden');
   document.getElementById('scres').innerHTML='';
   document.getElementById('scerr').innerHTML='';
   document.getElementById('smin').value='';
   scanActive=true;startCam();
 }
-function showList(){stopCamera();document.getElementById('sv-scan').classList.add('hidden');document.getElementById('sv-list').classList.remove('hidden');reloadDash();}
+function showList(){} // legacy stub
 async function startCam(){
   try{
     const s=await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'}});
@@ -1769,7 +1821,7 @@ async function hdlScan(code){
   if(!a){ct.innerHTML=`<div class="srs"><div style="color:#ff6b6b;font-size:14px;margin-bottom:16px">❌ Codice non trovato: <code style="letter-spacing:2px">${code}</code></div><button class="sag" onclick="rstScan()">🔁 Scansiona di nuovo</button></div>`;return;}
   if(a.status==='delivered'){ct.innerHTML=`<div class="srs"><div class="sre">${a.prizeEmoji}</div><div class="srp">${a.prizeName}</div><div class="sru">${a.userName||a.userEmail||'—'}</div><div class="src">${a.code}</div><span class="srs2" style="background:rgba(255,255,255,.06);color:#666">✓ GIÀ CONSEGNATO</span><div style="color:#555;font-size:12px;padding:8px 0 16px">Premio già consegnato in precedenza.</div><button class="sag" onclick="rstScan()">🔁 Scansiona di nuovo</button></div>`;return;}
   ct.innerHTML=`<div class="srs"><div class="sre">${a.prizeEmoji}</div><div class="srp">${a.prizeName}</div><div class="sru">${a.userName||a.userEmail||'—'}</div><div class="src">${a.code}</div><span class="srs2" style="background:rgba(178,34,34,.15);color:var(--red)">⏳ DA CONSEGNARE</span><br><button class="sdl" id="sdlbtn" onclick="scnDel('${a.userToken}')">SEGNA CONSEGNATO</button><div style="color:#555;font-size:11px;text-align:center;margin-top:10px;letter-spacing:1px;font-family:var(--fd)">CONFERMA LA CONSEGNA PRIMA DI SCANSIONARE IL PROSSIMO</div></div>`;
-  document.getElementById('scn-back-btn').style.display='none';
+  document.getElementById('scvid').style.display='none';
 }
 async function scnDel(token){
   const btn=document.getElementById('sdlbtn');if(btn){btn.textContent='…';btn.disabled=true;}
@@ -1778,13 +1830,13 @@ async function scnDel(token){
   allAsgn=await window.DB.getAllAssignments();
   const ct=document.getElementById('scres');
   ct.innerHTML=`<div class="srs" style="text-align:center;padding:28px 20px"><div style="font-size:52px;margin-bottom:12px">✅</div><div style="font-family:var(--fd);font-size:28px;font-weight:800;letter-spacing:2px;color:#4ecdc4">CONSEGNATO</div><div style="color:var(--g);font-size:13px;margin-top:8px">Premio registrato con successo</div></div>`;
-  document.getElementById('scn-back-btn').style.display='';
+  document.getElementById('scvid').style.display='';
   setTimeout(()=>rstScan(),1800);
 }
 function rstScan(){
   document.getElementById('scres').innerHTML='';
   const inp=document.getElementById('smin');inp.disabled=false;inp.style.opacity='1';inp.value='';
-  document.getElementById('scn-back-btn').style.display='';
+  document.getElementById('scvid').style.display='';
   scanActive=true;startCam();
 }
 
@@ -1795,9 +1847,8 @@ async function showAdminPage(){
   await loadPrizes();
   await loadRegulationConfig();
   updateTestModeUI();
-  // Load dashboard data (first tab)
   await loadQRSources();
-  if(!_dashCache) dashRefresh();
+  switchAdminTab('quick'); // start on Quick Stats tab
 }
 async function loadPrizes(){try{admPrizes=await window.DB.getPrizes();renderPCfg();}catch(e){}}
 function renderPCfg(){
@@ -2410,12 +2461,55 @@ function renderDashboard(){
 }
 
 // ── ADMIN TAB SWITCHING ───────────────────────────────────────────────────
+// ── QUICK STATS ───────────────────────────────────────────────────────────
+async function quickStatsRefresh(){
+  const btn = document.querySelector('[onclick="quickStatsRefresh()"]');
+  if(btn){ btn.disabled=true; btn.textContent='⏳ Caricamento…'; }
+  try{
+    const stats = await window.DB.getDailyStats(); // 1 lettura sola
+    const today = new Date().toISOString().slice(0,10);
+    // Today
+    const todayCount = stats[today] || 0;
+    document.getElementById('qs-today').textContent = todayCount;
+    // All days sorted
+    const days = Object.entries(stats)
+      .filter(([k])=>k.match(/^\d{4}-\d{2}-\d{2}$/))
+      .sort((a,b)=>b[0].localeCompare(a[0]));
+    const daysEl = document.getElementById('qs-days');
+    if(days.length <= 1){
+      daysEl.innerHTML = '';
+    } else {
+      const maxVal = Math.max(...days.map(d=>d[1]),1);
+      daysEl.innerHTML = `<div style="font-family:var(--fd);font-size:9px;letter-spacing:3px;color:var(--g);text-transform:uppercase;margin-bottom:8px">Storico</div>` +
+        days.map(([date,count])=>{
+          const label = date === today ? 'OGGI' : new Date(date+'T12:00:00').toLocaleDateString('it-IT',{weekday:'short',day:'numeric',month:'short'}).toUpperCase();
+          const pct = Math.round(count/maxVal*100);
+          return `<div style="margin-bottom:10px">
+            <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px">
+              <span style="font-family:var(--fd);letter-spacing:2px;color:${date===today?'var(--w)':'var(--g)'}">${label}</span>
+              <span style="font-family:var(--fd);font-weight:700;color:${date===today?'var(--w)':'var(--g)'}">${count}</span>
+            </div>
+            <div style="background:var(--b);height:4px"><div style="height:100%;background:${date===today?'var(--red)':'#444'};width:${pct}%;transition:width .4s"></div></div>
+          </div>`;
+        }).join('');
+    }
+    // Last update
+    const lu = document.getElementById('qs-last-update');
+    if(lu) lu.textContent = 'Aggiornato: '+new Date().toLocaleTimeString('it-IT',{hour:'2-digit',minute:'2-digit'});
+  }catch(e){
+    document.getElementById('qs-today').textContent = 'ERR';
+    console.error('quickStats error:', e);
+  }finally{
+    if(btn){ btn.disabled=false; btn.textContent='↺ AGGIORNA'; }
+  }
+}
+
 function switchAdminTab(tab){
   document.querySelectorAll('.adm-tab').forEach(t=>t.classList.toggle('active', t.dataset.tab===tab));
   document.querySelectorAll('.adm-tab-content').forEach(p=>p.classList.add('hidden'));
   const panel = document.getElementById('adm-tab-'+tab);
   if(panel) panel.classList.remove('hidden');
-  if(tab==='dash' && !_dashCache) dashRefresh(true);
+  // NO automatic data loading — user must click refresh
   if(tab==='qr' && (!qrSources || !qrSources.length)) loadQRSources();
 }
 
@@ -2547,6 +2641,30 @@ document.addEventListener('keydown', e=>{ if(e.key==='Escape') closeAccessMenu()
 </script>
 
 <!-- Access menu (5 taps on logo to reveal) -->
+<div id="access-menu" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);backdrop-filter:blur(8px);z-index:9999;align-items:center;justify-content:center;padding:24px" onclick="closeAccessMenu(event)">
+  <div style="background:#0f0f0f;border:1px solid #2a2a2a;padding:24px;max-width:320px;width:100%;position:relative" onclick="event.stopPropagation()">
+    <div style="position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent,#B22222,transparent)"></div>
+    <div style="font-family:'Barlow Condensed',sans-serif;font-size:10px;letter-spacing:5px;color:#666;text-transform:uppercase;text-align:center;margin-bottom:6px">Accesso Riservato</div>
+    <div style="font-family:'Barlow Condensed',sans-serif;font-size:22px;font-weight:800;letter-spacing:3px;text-align:center;color:#f0ede8;text-transform:uppercase;margin-bottom:20px">Gestione</div>
+    <button onclick="goToStaff()" style="width:100%;padding:14px;background:rgba(255,255,255,.04);border:1px solid #2a2a2a;color:#f0ede8;font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:700;letter-spacing:3px;text-transform:uppercase;cursor:pointer;margin-bottom:10px">Staff</button>
+    <button onclick="goToAdmin()" style="width:100%;padding:14px;background:rgba(255,255,255,.04);border:1px solid #2a2a2a;color:#f0ede8;font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:700;letter-spacing:3px;text-transform:uppercase;cursor:pointer;margin-bottom:14px">Admin</button>
+    <button onclick="closeAccessMenu()" style="width:100%;padding:10px;background:transparent;border:none;color:#555;font-family:'Barlow Condensed',sans-serif;font-size:11px;letter-spacing:3px;text-transform:uppercase;cursor:pointer">Annulla</button>
+  </div>
+</div>
+
+</body>
+</html>async function hdlMan(v){
+  const code=v.trim().toUpperCase();
+  if(code.length<6)return;
+  _lastScannedCode=code;
+  const el=document.getElementById('scres');
+  el.innerHTML='<div class="dld">Ricerca in corso…</div>';
+  try{
+    const a=await window.DB.lookupCode(code);
+    renderStaffResult(a);
+  }catch(e){el.innerHTML='<div class="seb">Errore di rete. Riprova.</div>';}
+}
+
 <div id="access-menu" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);backdrop-filter:blur(8px);z-index:9999;align-items:center;justify-content:center;padding:24px" onclick="closeAccessMenu(event)">
   <div style="background:#0f0f0f;border:1px solid #2a2a2a;padding:24px;max-width:320px;width:100%;position:relative" onclick="event.stopPropagation()">
     <div style="position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent,#B22222,transparent)"></div>
