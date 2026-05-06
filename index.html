@@ -70,6 +70,7 @@
               const asgn={id:primaryKey,userToken:token,userName:name,userEmail:email||token,deviceToken:token,prizeId:`day${dayIndex}_pos${countToday}`,prizeName:prize.name,prizeEmoji:prize.emoji||'🎁',prizeDesc:prize.name,prizeColor:'#B22222',code,status:"assigned",assignedAt:new Date().toISOString(),deliveredAt:null,dayIndex,seqPosition:countToday,isTest:testMode||false,ref:window._uRef||''};
               await setDoc(doc(db,"assignments",primaryKey),asgn);
               if(token&&token!==primaryKey)await setDoc(doc(db,"assignments",token),{_ref:primaryKey,userEmail:email,deviceToken:token,assignedAt:asgn.assignedAt});
+              try{const td=new Date().toISOString().slice(0,10);await setDoc(doc(db,"config","daily_stats"),{[td]:increment(1)},{merge:true});}catch(e){}
               return asgn;
             }else{return null;}
           }
@@ -86,6 +87,7 @@
         tx.update(pr,{assigned:f.data().assigned+1});tx.set(doc(db,"assignments",primaryKey),asgn);
       });
       if(token&&token!==primaryKey)await setDoc(doc(db,"assignments",token),{_ref:primaryKey,userEmail:email,deviceToken:token,assignedAt:asgn.assignedAt});
+      try{const td=new Date().toISOString().slice(0,10);await setDoc(doc(db,"config","daily_stats"),{[td]:increment(1)},{merge:true});}catch(e){}
       return asgn;
     }
 
@@ -2387,8 +2389,9 @@ function renderDashboard(){
   const ref = _dashFilter;
 
   const realAsgn = (assignments||[]).filter(a => a && !a._ref);
-  const filtAsgn = ref ? realAsgn.filter(a=>(a.ref||'')===ref) : realAsgn;
-  const filtScans = ref ? (scans||[]).filter(s=>s && s.ref===ref) : (scans||[]);
+  // ref is the QR source id (e.g. "federica", "hostess-1")
+  const filtAsgn = ref ? realAsgn.filter(a=>(a.ref||'').toLowerCase()===ref.toLowerCase()) : realAsgn;
+  const filtScans = ref ? (scans||[]).filter(s=>s && (s.ref||'').toLowerCase()===ref.toLowerCase()) : (scans||[]);
 
   const total_scans = filtScans.length;
   const total_played = filtAsgn.length;
