@@ -504,8 +504,7 @@
 <!-- FOOTER -->
 <div id="footer" class="hidden">
   <button class="ft-link" onclick="openRegModal()">Regolamento</button>
-  <span class="ft-sep">|</span>
-  <button class="ft-link" onclick="openPrivacyModal()">Privacy</button>
+  
 </div>
 
 <!-- REGULATION MODAL -->
@@ -2653,17 +2652,7 @@ document.addEventListener('keydown', e=>{ if(e.key==='Escape') closeAccessMenu()
 </div>
 
 </body>
-</html>async function hdlMan(v){
-  const code=v.trim().toUpperCase();
-  if(code.length<6)return;
-  _lastScannedCode=code;
-  const el=document.getElementById('scres');
-  el.innerHTML='<div class="dld">Ricerca in corso…</div>';
-  try{
-    const a=await window.DB.lookupCode(code);
-    renderStaffResult(a);
-  }catch(e){el.innerHTML='<div class="seb">Errore di rete. Riprova.</div>';}
-}
+
 
 <div id="access-menu" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);backdrop-filter:blur(8px);z-index:9999;align-items:center;justify-content:center;padding:24px" onclick="closeAccessMenu(event)">
   <div style="background:#0f0f0f;border:1px solid #2a2a2a;padding:24px;max-width:320px;width:100%;position:relative" onclick="event.stopPropagation()">
@@ -2675,6 +2664,10 @@ document.addEventListener('keydown', e=>{ if(e.key==='Escape') closeAccessMenu()
     <button onclick="closeAccessMenu()" style="width:100%;padding:10px;background:transparent;border:none;color:#555;font-family:'Barlow Condensed',sans-serif;font-size:11px;letter-spacing:3px;text-transform:uppercase;cursor:pointer">Annulla</button>
   </div>
 </div>
+
+
+
+
 
 </body>
 </html>
