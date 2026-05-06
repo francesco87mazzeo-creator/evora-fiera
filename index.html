@@ -875,9 +875,10 @@ function generateFingerprint(){
 }
 
 // ── BOOT ──────────────────────────────────────────────────────────────────
-// Track QR scan on page load if ref present and no token (= came from QR, not form)
+// Track QR scan: save when ref is present AND token present (= compiled form after QR scan)
+// This is the correct moment: user scanned QR → filled form → arrived here with both ref + token
 window.addEventListener('db-ready', async()=>{
-  if(window._uRef && !params.get('token')){
+  if(window._uRef && params.get('token')){
     try{ await window.DB.saveScan(window._uRef); }catch(e){}
   }
 });
