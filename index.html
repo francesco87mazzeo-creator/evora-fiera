@@ -1974,9 +1974,14 @@ async function saveRegulationConfig(){
   try{
     const company={name:document.getElementById('rg-name')?.value||'',vat:document.getElementById('rg-vat')?.value||'',addr:document.getElementById('rg-addr')?.value||'',city:document.getElementById('rg-city')?.value||'',email:document.getElementById('rg-email')?.value||''};
     const event={name:document.getElementById('rg-event')?.value||'',venue:document.getElementById('rg-venue')?.value||''};
-    const payload={company,event,regDays,regSequences,regLocked,admPrizes};
+    // Serialize nested arrays as JSON strings — Firestore doesn't support nested arrays
+    const payload={
+      company, event, regLocked,
+      regDays: JSON.stringify(regDays||[]),
+      regSequences: JSON.stringify(regSequences||[]),
+      admPrizes: JSON.stringify(admPrizes||[])
+    };
     await window.DB.saveConfig('regulation',payload);
-    // Update in-memory data so modal stays correct
     savedRegData.company=company;
     savedRegData.event=event;
     buildRegulationModalText();
@@ -1999,15 +2004,15 @@ async function loadRegulationConfig(){
   }
   if(data.regDays&&data.regDays.length>0) regDays=data.regDays;
   if(data.regLocked) regLocked=data.regLocked;
-  if(data.admPrizes) admPrizes=data.admPrizes;
+  if(data.admPrizes) admPrizes=typeof data.admPrizes==="string"?JSON.parse(data.admPrizes):data.admPrizes;
   // Load sequences from dedicated documents (authoritative source)
   try{
     const seqLoads=await Promise.all([0,1,2,3].map(i=>window.DB.getConfig_seq(i)));
     const anyLoaded=seqLoads.some(s=>s&&s.length>0);
     if(anyLoaded) regSequences=seqLoads.map(s=>s||[]);
-    else if(data.regSequences) regSequences=data.regSequences; // fallback to old format
+    else if(data.regSequences) regSequences=typeof data.regSequences==="string"?JSON.parse(data.regSequences):data.regSequences; // fallback to old format
   }catch(e){
-    if(data.regSequences) regSequences=data.regSequences;
+    if(data.regSequences) regSequences=typeof data.regSequences==="string"?JSON.parse(data.regSequences):data.regSequences;
   }
   renderRegDays();
   if(regDays.some(d=>(d.dist||[]).length>0)) document.getElementById('reg-seq-section').classList.remove('hidden');
@@ -2674,4 +2679,4 @@ document.addEventListener('keydown', e=>{ if(e.key==='Escape') closeAccessMenu()
 
 
 </body>
-</html> 
+</html>
