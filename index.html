@@ -46,11 +46,18 @@
       // ═══════════════════════════════════════════════════════════════════
       // RANGE MODE: counter GLOBALE, avanza al range successivo quando esaurito
       // ═══════════════════════════════════════════════════════════════════
+      // In TEST MODE generiamo un primaryKey univoco così le giocate non si sovrascrivono
+      const realPrimaryKey = testMode 
+        ? `test_${Date.now()}_${Math.random().toString(36).substring(2,8)}`
+        : primaryKey;
+      
       async function savePointers(asgn){
-        if(customerId&&customerId!==primaryKey) try{await setDoc(doc(db,"assignments",customerId),{_ref:primaryKey,shopifyCustomerId:customerId,assignedAt:asgn.assignedAt});}catch(e){}
-        if(emailKey&&emailKey!==primaryKey) try{await setDoc(doc(db,"assignments",emailKey),{_ref:primaryKey,userEmail:email,assignedAt:asgn.assignedAt});}catch(e){}
-        if(token&&token!==primaryKey&&token!==customerId) try{await setDoc(doc(db,"assignments",token),{_ref:primaryKey,deviceToken:token,assignedAt:asgn.assignedAt});}catch(e){}
-        if(fingerprint) try{await setDoc(doc(db,"assignments",'fp_'+fingerprint),{_ref:primaryKey,assignedAt:asgn.assignedAt});}catch(e){}
+        // In test mode NON salviamo pointer, così non bloccano future giocate test
+        if(testMode) return;
+        if(customerId&&customerId!==realPrimaryKey) try{await setDoc(doc(db,"assignments",customerId),{_ref:realPrimaryKey,shopifyCustomerId:customerId,assignedAt:asgn.assignedAt});}catch(e){}
+        if(emailKey&&emailKey!==realPrimaryKey) try{await setDoc(doc(db,"assignments",emailKey),{_ref:realPrimaryKey,userEmail:email,assignedAt:asgn.assignedAt});}catch(e){}
+        if(token&&token!==realPrimaryKey&&token!==customerId) try{await setDoc(doc(db,"assignments",token),{_ref:realPrimaryKey,deviceToken:token,assignedAt:asgn.assignedAt});}catch(e){}
+        if(fingerprint) try{await setDoc(doc(db,"assignments",'fp_'+fingerprint),{_ref:realPrimaryKey,assignedAt:asgn.assignedAt});}catch(e){}
       }
       
       // Carica TUTTE le sequenze (4 range)
@@ -76,6 +83,14 @@
         }
       });
       console.log("[assignPrize] Premi già assegnati per range:",counts);
+      console.log("[assignPrize] Test mode:",testMode,"primaryKey:",primaryKey,"realPrimaryKey:",realPrimaryKey);
+      console.log("[assignPrize] Total docs in assignments:",allAsgnRange.docs.length);
+      // Lista tutti i documenti per debug
+      allAsgnRange.docs.forEach(d=>{
+        const a=d.data();
+        if(a._ref) console.log("  POINTER:",d.id,"→",a._ref);
+        else console.log("  DOC:",d.id,"dayIndex:",a.dayIndex,"isTest:",a.isTest,"seqPos:",a.seqPosition,"prize:",a.prizeName);
+      });
       
       // Determina quale range usare
       let dayIndex=forceDayIndex;
@@ -106,11 +121,10 @@
       
       const prize=daySeq[seqPosition];
       const code=`EVR-R${dayIndex+1}-${Math.random().toString(36).substring(2,6).toUpperCase()}`;
-      const asgn={id:primaryKey,shopifyCustomerId:customerId||'',userToken:token,userName:name,userEmail:email||token,deviceToken:token,deviceFingerprint:fingerprint||'',prizeId:`range${dayIndex}_pos${seqPosition}`,prizeName:prize.name,prizeEmoji:prize.emoji||'🎁',prizeDesc:prize.name,prizeColor:'#B22222',code,status:"assigned",assignedAt:new Date().toISOString(),deliveredAt:null,dayIndex,seqPosition,isTest:testMode||false,ref:ref||''};
-      await setDoc(doc(db,"assignments",primaryKey),asgn);
-      await savePointers(asgn);
-      try{const td=new Date().toISOString().slice(0,10);await setDoc(doc(db,"config","daily_stats"),{[td]:increment(1)},{merge:true});}catch(e){}
-      return asgn;
+      const asgn={id:realPrimaryKey,shopifyCustomerId:customerId||'',userToken:token,userName:name,userEmail:email||token,deviceToken:token,deviceFingerprint:fingerprint||'',prizeId:`range${dayIndex}_pos${seqPosition}`,prizeName:prize.name,prizeEmoji:prize.emoji||'🎁',prizeDesc:prize.name,prizeColor:'#B22222',code,status:"assigned",assignedAt:new Date().toISOString(),deliveredAt:null,dayIndex,seqPosition,isTest:testMode||false,ref:ref||''};
+      await setDoc(doc(db,"assignments",realPrimaryKey),asgn);
+      // Pointer salvati solo in modalità reale (non test)
+      if(!testMode){await savePointers(asgn);}
       try{const td=new Date().toISOString().slice(0,10);await setDoc(doc(db,"config","daily_stats"),{[td]:increment(1)},{merge:true});}catch(e){}
       return asgn;
     }
@@ -183,7 +197,9 @@
 
     // Save a single day's sequence as its own document: sequences/day0, day1, etc.
     async function saveDaySequence(dayIndex, prizes){
-      await setDoc(doc(db,"sequences","day"+dayIndex),{prizes, savedAt:new Date().toISOString()});
+      // Se dayIndex è "main" salva direttamente come "main", altrimenti "day"+dayIndex
+      const docName = dayIndex==="main" ? "main" : "day"+dayIndex;
+      await setDoc(doc(db,"sequences",docName),{prizes, savedAt:new Date().toISOString()});
     }
 
     // ── RESET: full tabula rasa ───────────────────────────────────────────
@@ -194,6 +210,9 @@
       // 2. Reset assigned counters on prizes (keep prize config, just zero the counter)
       const prSnap=await getDocs(collection(db,"prizes"));
       await Promise.all(prSnap.docs.map(d=>updateDoc(doc(db,"prizes",d.id),{assigned:0})));
+      // 2b. Cancella anche la sequenza unica
+      try{await deleteDoc(doc(db,"sequences","main"));}catch(e){}
+      for(let i=0;i<4;i++){try{await deleteDoc(doc(db,"sequences","day"+i));}catch(e){}}
       // 3. Delete regulation config
       try{await deleteDoc(doc(db,"config","regulation"));}catch(e){}
       // 4. Delete uploaded regulation HTML
@@ -2235,11 +2254,16 @@ async function generateRegulation(){
   const fairDates=regDays.map(d=>d.date).filter(Boolean);
   await window.DB.saveConfig('fairDates', fairDates);
 
-  // ── Save each day sequence as a SEPARATE Firebase document ────────────
-  // This avoids the 1MB Firestore document size limit
+  // ── Save each range sequence as a SEPARATE Firebase document ─────────
   for(let i=0;i<regSequences.length;i++){
     await window.DB.saveDaySequence(i, regSequences[i]);
   }
+  
+  // ── Save UNIFIED main sequence (concatenazione dei 4 range) ──────────
+  // Questa è la sequenza che il gioco usa: range1 + range2 + range3 + range4
+  const mainSequence = regSequences.flat();
+  console.log("[generateRegulation] Sequenza unica generata:",mainSequence.length,"premi totali");
+  await window.DB.saveDaySequence("main", mainSequence);
 
   // Auto-save regulation HTML directly to Firebase for user modal
   const regHtmlContent = generateRegulationHTMLString();
