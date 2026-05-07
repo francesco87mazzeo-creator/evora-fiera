@@ -880,7 +880,7 @@ if(isQRScanMode){
   window.addEventListener('db-ready', async function(){
     try{
       const scanId = 'scan_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
-      await window.DB.saveScan(scanId, uRef);
+      await window.DB.saveScan(uRef);
       console.log('[QR Mode] ✅ Scan salvato su Firebase');
     }catch(e){
       console.log('[QR Mode] Errore salvataggio scan:', e);
