@@ -238,7 +238,17 @@
       if(d._ref) return null; // skip pointers
       return d;
     }
-    window.DB={initPrizes,assignPrize,checkAlreadyPlayed,markDelivered,getAllAssignments,findByCode,getPrizes,savePrizes,listenAssignment,getConfig,saveConfig,resetAll,saveDaySequence,getDoc_,saveAssignmentPointer,getConfig_seq,saveScan,getAllScans,getDailyStats,lookupCode};
+    async function getRefByEmail(email){
+      if(!email) return '';
+      const emailKey = 'email_' + email.toLowerCase().replace(/[^a-z0-9]/g, '_');
+      try{
+        const snap = await getDoc(doc(db, 'form_submissions', emailKey));
+        if(snap.exists() && snap.data().ref) return snap.data().ref;
+      }catch(e){ console.log('[DB] getRefByEmail error:', e); }
+      return '';
+    }
+
+    window.DB={initPrizes,assignPrize,checkAlreadyPlayed,markDelivered,getAllAssignments,findByCode,getPrizes,savePrizes,listenAssignment,getConfig,saveConfig,resetAll,saveDaySequence,getDoc_,saveAssignmentPointer,getConfig_seq,saveScan,getAllScans,getDailyStats,lookupCode,getRefByEmail};
     console.log('[EVORA] Firebase init started');
     try{
       await initPrizes();
@@ -845,12 +855,61 @@ let testModeDate=false;    // bypasses date check
 let selectedTestDay=-1;    // -1 = not selected, 0-3 = day index for simulation
 
 // Base URL for QR codes — update this with your Shopify page URL
+// URL base per QR codes - punta al gioco che fa da tracker
+const QR_BASE_URL = 'https://francesco87mazzeo-creator.github.io/evora-fiera/';
+// URL form Shopify (usato internamente per redirect)
 const SHOPIFY_FORM_URL = 'https://evorafitness.it/pages/fiera-rimini-wellness-2026';
 
 const params=new URLSearchParams(window.location.search);
 const uName=params.get('name')||params.get('first_name')||'Ospite';
 const uEmail=params.get('email')||'';
 const uRef=params.get('ref')||''; // QR tracking source
+
+// ══════════════════════════════════════════════════════════════════
+// QR TRACKER MODE - Se arriva solo con ?ref= (senza customer_id/email)
+// salva scan su Firebase e redirect al form Shopify
+// ══════════════════════════════════════════════════════════════════
+const uCustomerId_temp=params.get('customer_id')||params.get('shopify_customer_id')||'';
+const isQRScanMode = uRef && !uCustomerId_temp && !uEmail;
+
+if(isQRScanMode){
+  console.log('[QR Mode] Redirect mode attivo - Ref:', uRef);
+  
+  // Nascondi tutto il gioco, mostra solo loader
+  document.body.innerHTML = `
+    <div style="margin:0;padding:0;display:flex;align-items:center;justify-content:center;min-height:100vh;background:#1a1a1a;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif">
+      <div style="text-align:center">
+        <div style="width:50px;height:50px;border:4px solid rgba(255,255,255,0.1);border-top-color:#B22222;border-radius:50%;animation:spin 0.8s linear infinite;margin:0 auto 20px"></div>
+        <div style="color:#fff;font-size:14px;opacity:0.7">Caricamento...</div>
+      </div>
+    </div>
+    <style>@keyframes spin{to{transform:rotate(360deg)}}</style>
+  `;
+  
+  // Salva scan su Firebase quando db è ready
+  window.addEventListener('db-ready', async function(){
+    try{
+      const scanId = 'scan_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+      await window.DB.saveScan(scanId, uRef);
+      console.log('[QR Mode] ✅ Scan salvato su Firebase');
+    }catch(e){
+      console.log('[QR Mode] Errore salvataggio scan:', e);
+    }
+    
+    // Salva ref in sessionStorage per il form
+    sessionStorage.setItem('evora_qr_ref', uRef);
+    
+    // Redirect al form Shopify dopo 300ms
+    setTimeout(function(){
+      const formUrl = 'https://evorafitness.it/pages/fiera-rimini-wellness-2026';
+      console.log('[QR Mode] Redirect a:', formUrl);
+      window.location.href = formUrl;
+    }, 300);
+  });
+  
+  // Non continuare con il resto del codice gioco
+  throw new Error('[QR Mode] Stopping game execution');
+}
 
 // Shopify customer_id è il token primario (da link email Flow)
 // Fallback: token device legacy (per test / accesso diretto)
@@ -902,7 +961,14 @@ window.addEventListener('db-ready', async()=>{
 });
 window.addEventListener('db-ready',async()=>{
   const uFingerprint=generateFingerprint();
-  cUser={token:uToken,customerId:uCustomerId,name:uName,email:uEmail,fingerprint:uFingerprint,ref:uRef};
+  // Se non c'è ref nell'URL, recuperalo da Firebase usando l'email
+  let finalRef = uRef;
+  if(!finalRef && uEmail){
+    console.log('[Boot] Recupero ref da Firebase per email:', uEmail);
+    finalRef = await window.DB.getRefByEmail(uEmail);
+    if(finalRef) console.log('[Boot] Ref recuperato da Firebase:', finalRef);
+  }
+  cUser={token:uToken,customerId:uCustomerId,name:uName,email:uEmail,fingerprint:uFingerprint,ref:finalRef};
   try{const p=await window.DB.getConfig('passwords');if(p)PWD=p;}catch(e){}
   // Load test mode states
   try{const tm=await window.DB.getConfig('testMode');if(tm&&typeof tm==='object'){testModeReplay=!!tm.replay;testModeDate=!!tm.date;if(typeof tm.day==='number')selectedTestDay=tm.day;}}catch(e){}
@@ -1370,7 +1436,7 @@ async function doShowGame(){
   hideAll(); show('pg-game'); showFooter();
   try{
     const dayOverride=testModeDate&&selectedTestDay>=0?selectedTestDay:-1;
-    cAsgn=await window.DB.assignPrize(cUser.token,cUser.name,cUser.email,testModeReplay,dayOverride,uRef,cUser.customerId||"",cUser.fingerprint||"");
+    cAsgn=await window.DB.assignPrize(cUser.token,cUser.name,cUser.email,testModeReplay,dayOverride,cUser.ref||"",cUser.customerId||"",cUser.fingerprint||"");
     if(!cAsgn){alert('Tutti i premi sono esauriti per oggi. Grazie per aver partecipato!');showWelcome();return;}
     // Fingerprint pointer saved inside assignPrize via savePointers()
   }catch(e){alert('Errore di connessione. Riprova.');showWelcome();return;}
@@ -2544,7 +2610,7 @@ function renderQRSources(){
     el.innerHTML = '<div style="color:var(--g);font-size:13px;padding:12px 0">Nessun QR creato. Aggiungine uno.</div>';
     return;
   }
-  const formUrl = SHOPIFY_FORM_URL;
+  const formUrl = QR_BASE_URL;
   el.innerHTML = qrSources.map((src,i)=>`
     <div style="background:#0a0a0a;border:1px solid var(--b);padding:14px;margin-bottom:8px">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
@@ -2561,7 +2627,7 @@ function renderQRSources(){
 }
 
 function copyQRUrl(id){
-  const formUrl = SHOPIFY_FORM_URL;
+  const formUrl = QR_BASE_URL;
   const url = `${formUrl}?ref=${encodeURIComponent(id)}`;
   if(navigator.clipboard) navigator.clipboard.writeText(url);
   if(navigator.vibrate) navigator.vibrate(40);
