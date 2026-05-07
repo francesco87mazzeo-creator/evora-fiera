@@ -238,17 +238,7 @@
       if(d._ref) return null; // skip pointers
       return d;
     }
-    async function getRefByEmail(email){
-      if(!email) return '';
-      const emailKey = 'email_' + email.toLowerCase().replace(/[^a-z0-9]/g, '_');
-      try{
-        const snap = await getDoc(doc(db, 'form_submissions', emailKey));
-        if(snap.exists() && snap.data().ref) return snap.data().ref;
-      }catch(e){ console.log('[DB] getRefByEmail error:', e); }
-      return '';
-    }
-
-    window.DB={initPrizes,assignPrize,checkAlreadyPlayed,markDelivered,getAllAssignments,findByCode,getPrizes,savePrizes,listenAssignment,getConfig,saveConfig,resetAll,saveDaySequence,getDoc_,saveAssignmentPointer,getConfig_seq,saveScan,getAllScans,getDailyStats,lookupCode,getRefByEmail};
+    window.DB={initPrizes,assignPrize,checkAlreadyPlayed,markDelivered,getAllAssignments,findByCode,getPrizes,savePrizes,listenAssignment,getConfig,saveConfig,resetAll,saveDaySequence,getDoc_,saveAssignmentPointer,getConfig_seq,saveScan,getAllScans,getDailyStats,lookupCode};
     console.log('[EVORA] Firebase init started');
     try{
       await initPrizes();
@@ -961,14 +951,8 @@ window.addEventListener('db-ready', async()=>{
 });
 window.addEventListener('db-ready',async()=>{
   const uFingerprint=generateFingerprint();
-  // Se non c'è ref nell'URL, recuperalo da Firebase usando l'email
-  let finalRef = uRef;
-  if(!finalRef && uEmail){
-    console.log('[Boot] Recupero ref da Firebase per email:', uEmail);
-    finalRef = await window.DB.getRefByEmail(uEmail);
-    if(finalRef) console.log('[Boot] Ref recuperato da Firebase:', finalRef);
-  }
-  cUser={token:uToken,customerId:uCustomerId,name:uName,email:uEmail,fingerprint:uFingerprint,ref:finalRef};
+  // Ref viene dall'URL o rimane vuoto (non serve per gioco, solo per analytics QR)
+  cUser={token:uToken,customerId:uCustomerId,name:uName,email:uEmail,fingerprint:uFingerprint,ref:uRef};
   try{const p=await window.DB.getConfig('passwords');if(p)PWD=p;}catch(e){}
   // Load test mode states
   try{const tm=await window.DB.getConfig('testMode');if(tm&&typeof tm==='object'){testModeReplay=!!tm.replay;testModeDate=!!tm.date;if(typeof tm.day==='number')selectedTestDay=tm.day;}}catch(e){}
@@ -2660,38 +2644,36 @@ async function showQRStats(id, name){
   el.style.display = 'block';
   document.getElementById('qr-stats-title').textContent = name;
   try{
-    const all = await window.DB.getAllAssignments();
-    const filtered = all.filter(a => !a._ref && (a.ref||'') === id);
+    // Conta scansioni QR da collection qr_scans
+    const scans = await window.DB.getAllScans();
+    const filtered = scans.filter(s => s.ref === id);
     const total = filtered.length;
-    const delivered = filtered.filter(a=>a.status==='delivered').length;
-    // Group by prize
-    const byPrize = {};
-    filtered.forEach(a=>{ byPrize[a.prizeName] = (byPrize[a.prizeName]||0)+1; });
+    
+    // Raggruppa per giorno
+    const byDay = {};
+    filtered.forEach(s => {
+      const date = s.timestamp ? s.timestamp.split('T')[0] : 'unknown';
+      byDay[date] = (byDay[date]||0)+1;
+    });
+    
     document.getElementById('qr-stats-content').innerHTML = `
-      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:16px">
-        <div style="background:#0a0a0a;border:1px solid var(--b);padding:12px;text-align:center">
-          <div style="font-family:var(--fd);font-size:28px;font-weight:900;color:var(--w)">${total}</div>
-          <div style="font-size:10px;letter-spacing:2px;color:var(--g);margin-top:4px">GIOCATORI</div>
-        </div>
-        <div style="background:#0a0a0a;border:1px solid var(--b);padding:12px;text-align:center">
-          <div style="font-family:var(--fd);font-size:28px;font-weight:900;color:#4ecdc4">${delivered}</div>
-          <div style="font-size:10px;letter-spacing:2px;color:var(--g);margin-top:4px">RITIRATI</div>
-        </div>
-        <div style="background:#0a0a0a;border:1px solid var(--b);padding:12px;text-align:center">
-          <div style="font-family:var(--fd);font-size:28px;font-weight:900;color:var(--red)">${total>0?Math.round(delivered/total*100):0}%</div>
-          <div style="font-size:10px;letter-spacing:2px;color:var(--g);margin-top:4px">CONVERSIONE</div>
-        </div>
+      <div style="background:#0a0a0a;border:1px solid var(--b);padding:20px;text-align:center;margin-bottom:16px">
+        <div style="font-family:var(--fd);font-size:48px;font-weight:900;color:var(--w)">${total}</div>
+        <div style="font-size:12px;letter-spacing:2px;color:var(--g);margin-top:8px;text-transform:uppercase">Scansioni Totali</div>
       </div>
-      ${Object.keys(byPrize).length ? `
-        <div style="font-family:var(--fd);font-size:10px;letter-spacing:3px;color:var(--g);text-transform:uppercase;margin-bottom:8px">Premi assegnati</div>
-        ${Object.entries(byPrize).map(([p,n])=>`
+      ${Object.keys(byDay).length ? `
+        <div style="font-family:var(--fd);font-size:10px;letter-spacing:3px;color:var(--g);text-transform:uppercase;margin-bottom:8px">Scansioni per giorno</div>
+        ${Object.entries(byDay).sort((a,b)=>b[0].localeCompare(a[0])).map(([d,n])=>`
           <div style="display:flex;justify-content:space-between;padding:8px 12px;background:#0a0a0a;border:1px solid var(--b);margin-bottom:4px;font-size:13px">
-            <span>${p}</span><span style="font-weight:700">${n}</span>
+            <span>${d}</span><span style="font-weight:700">${n}</span>
           </div>
         `).join('')}
-      ` : '<div style="color:var(--g);font-size:13px">Nessun giocatore ancora.</div>'}
+      ` : '<div style="color:var(--g);font-size:13px;margin-top:12px">Nessuna scansione ancora.</div>'}
     `;
-  }catch(e){ document.getElementById('qr-stats-content').innerHTML = '<div style="color:#f66">Errore nel caricamento</div>'; }
+  }catch(e){ 
+    console.error('[QR Stats] Error:', e);
+    document.getElementById('qr-stats-content').innerHTML = '<div style="color:#f66">Errore nel caricamento</div>'; 
+  }
 }
 
 function closeQRStats(){
