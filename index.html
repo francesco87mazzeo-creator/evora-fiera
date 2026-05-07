@@ -28,10 +28,12 @@
     ];
 
     async function initPrizes(){
-      for(const p of DEFAULT_PRIZES){
+      // Parallelizza le 5 chiamate invece di farle in serie
+      await Promise.all(DEFAULT_PRIZES.map(async p=>{
         const r=doc(db,"prizes",p.id);
-        if(!(await getDoc(r)).exists()) await setDoc(r,p);
-      }
+        const ex=await getDoc(r);
+        if(!ex.exists()) await setDoc(r,p);
+      }));
     }
 
     async function assignPrize(token,name,email,testMode=false,forceDayIndex=-1,ref="",customerId="",fingerprint=""){
@@ -212,6 +214,7 @@
       await Promise.all(prSnap.docs.map(d=>updateDoc(doc(db,"prizes",d.id),{assigned:0})));
       // 2b. Cancella anche la sequenza unica
       try{await deleteDoc(doc(db,"sequences","main"));}catch(e){}
+      try{await deleteDoc(doc(db,"sequences","emergency"));}catch(e){}
       for(let i=0;i<4;i++){try{await deleteDoc(doc(db,"sequences","day"+i));}catch(e){}}
       // 3. Delete regulation config
       try{await deleteDoc(doc(db,"config","regulation"));}catch(e){}
@@ -277,8 +280,9 @@
     window.DB={initPrizes,assignPrize,checkAlreadyPlayed,markDelivered,getAllAssignments,findByCode,getPrizes,savePrizes,listenAssignment,getConfig,saveConfig,resetAll,saveDaySequence,getDoc_,saveAssignmentPointer,getConfig_seq,saveScan,getAllScans,getDailyStats,lookupCode};
     console.log('[EVORA] Firebase init started');
     try{
-      await initPrizes();
-      console.log('[EVORA] initPrizes OK, dispatching db-ready');
+      // initPrizes lazy: non bloccare il boot, gira in background
+      initPrizes().catch(e=>console.log('[initPrizes] background error:',e));
+      console.log('[EVORA] dispatching db-ready immediately');
     }catch(err){
       console.error('[EVORA] initPrizes FAILED:', err);
     }
@@ -740,6 +744,7 @@
       <button class="adm-tab" data-tab="reg" onclick="switchAdminTab('reg')">📋 Regolamento</button>
       <button class="adm-tab" data-tab="pwd" onclick="switchAdminTab('pwd')">🔑 Password</button>
       <button class="adm-tab" data-tab="test" onclick="switchAdminTab('test')">🧪 Test</button>
+      <button class="adm-tab" data-tab="emerg" onclick="switchAdminTab('emerg')" style="color:#f5a623">🚨 Emergenza</button>
       <button class="adm-tab" data-tab="reset" onclick="switchAdminTab('reset')" style="color:#ff6b6b">⚠ Reset</button>
     </div>
     <!-- ⚡ QUICK STATS (fiera live) -->
@@ -842,6 +847,33 @@
       <div id="tm-day-selector" class="hidden" style="padding:14px;background:#0a0a0a;border:1px solid #1a3a1a;border-top:none"><div style="font-family:var(--fd);font-size:10px;letter-spacing:3px;color:#4ecdc4;text-transform:uppercase;margin-bottom:10px">Simula range</div><div style="display:flex;gap:8px;flex-wrap:wrap" id="tm-day-btns"></div></div>
       <div class="adsv" id="test-mode-msg"></div>
     </div>
+    <div id="adm-tab-emerg" class="adm-tab-content hidden" style="padding:16px">
+      <div class="adst" style="color:#f5a623;margin-bottom:8px">🚨 EMERGENZA — Estendi fiera</div>
+      <div class="adss" style="margin-bottom:16px">Quando i premi finiscono prima della fine fiera, aggiungi giocate extra con sconto + 1 zaino random.</div>
+      
+      <div style="padding:14px;background:rgba(245,166,35,.06);border:1px solid rgba(245,166,35,.2);font-size:13px;color:#aaa;margin-bottom:20px;line-height:1.7">
+        Le giocate aggiunte qui useranno una sequenza separata. La maggior parte vince uno <strong style="color:#f5a623">SCONTO 15%</strong> sul codice <strong style="color:var(--w)">EVORAFIERA15</strong>, una sola riceverà uno <strong style="color:#f5a623">ZAINO</strong> in posizione random.
+      </div>
+      
+      <div class="adf">
+        <div class="adl">Numero giocate aggiuntive</div>
+        <input class="adi" type="number" id="emerg-total" placeholder="Es. 200" min="1"/>
+      </div>
+      <div class="adf">
+        <div class="adl">Numero zaini in palio</div>
+        <input class="adi" type="number" id="emerg-bags" placeholder="Es. 1" min="0" value="1"/>
+      </div>
+      
+      <div id="emerg-status" style="padding:12px;background:#0a0a0a;border:1px solid var(--b);font-size:13px;color:#aaa;margin:16px 0;line-height:1.6">
+        Caricamento stato emergenza...
+      </div>
+      
+      <div class="abr">
+        <button class="adbb" style="background:#f5a623;color:#000;width:100%" onclick="addEmergencyExtension()">➕ AGGIUNGI ESTENSIONE</button>
+      </div>
+      <div class="adsv" id="emerg-msg"></div>
+    </div>
+    
     <div id="adm-tab-reset" class="adm-tab-content hidden" style="padding:16px">
       <div class="adst" style="color:#ff6b6b;margin-bottom:8px">⚠ RESET COMPLETO</div>
       <div class="adss" style="margin-bottom:16px">Cancella tutte le partite, i codici assegnati e azzera i contatori.</div>
@@ -995,44 +1027,51 @@ window.addEventListener('db-ready',async()=>{
   const uFingerprint=generateFingerprint();
   // Ref viene dall'URL o rimane vuoto (non serve per gioco, solo per analytics QR)
   cUser={token:uToken,customerId:uCustomerId,name:uName,email:uEmail,fingerprint:uFingerprint,ref:uRef};
-  try{const p=await window.DB.getConfig('passwords');if(p)PWD=p;}catch(e){}
-  // Load test mode states
-  try{const tm=await window.DB.getConfig('testMode');if(tm&&typeof tm==='object'){testModeReplay=!!tm.replay;testModeDate=!!tm.date;if(typeof tm.day==='number')selectedTestDay=tm.day;}}catch(e){}
+  
+  // ─── FAST PATH: solo le 2 cose minime per giocare ────────────────────
+  // password + testMode (necessari per check già giocato)
+  try{
+    const [p,tm]=await Promise.all([
+      window.DB.getConfig('passwords'),
+      window.DB.getConfig('testMode')
+    ]);
+    if(p)PWD=p;
+    if(tm&&typeof tm==='object'){testModeReplay=!!tm.replay;testModeDate=!!tm.date;if(typeof tm.day==='number')selectedTestDay=tm.day;}
+  }catch(e){}
   applyTestModeBanner();
-  // Load saved regulation for modal use
-  try{
-    const reg=await window.DB.getConfig('regulation');
-    if(reg){
-      if(reg.regDays) regDays=reg.regDays;
-      if(reg.regLocked) regLocked=reg.regLocked;
-      if(reg.admPrizes) admPrizes=reg.admPrizes;
-      if(reg.company) savedRegData.company=reg.company;
-      if(reg.event) savedRegData.event=reg.event;
-      if(reg.event?.name) savedRegData.event.name=reg.event.name;
-      if(reg.admPrizes) savedRegData.admPrizes=reg.admPrizes;
-    }
-  }catch(e){}
-  try{
-    const seqLoads=await Promise.all([0,1,2,3].map(i=>window.DB.getConfig_seq(i)));
-    const anyLoaded=seqLoads.some(s=>s&&s.length>0);
-    if(anyLoaded) regSequences=seqLoads.map(s=>s||[]);
-    savedRegData.regSequences=regSequences;
-  }catch(e){}
-  try{
-    const regHtml=await window.DB.getConfig('regulation_html');
-    if(regHtml) savedRegData.regulationHtml=regHtml;
-  }catch(e){}
-  if(!admPrizes.length){
-    try{
-      const prizes=await window.DB.getPrizes();
-      if(prizes.length){ admPrizes=prizes; savedRegData.admPrizes=prizes; }
-    }catch(e){}
-  }
-  buildRegulationModalText();
-
-  // Signal Firebase is ready — loader will hide when bar also reaches 100%
+  
+  // ─── SEGNALA SUBITO READY: l'utente può giocare ──────────────────────
   window._firebaseReady = true;
   if(window._loaderBarDone) showApp();
+  
+  // ─── BACKGROUND LOAD: dati che servono solo per admin/regolamento ────
+  // Non bloccano l'utente che vuole giocare
+  (async()=>{
+    try{
+      const [reg,seqLoads,regHtml,prizes]=await Promise.all([
+        window.DB.getConfig('regulation'),
+        Promise.all([0,1,2,3].map(i=>window.DB.getConfig_seq(i))),
+        window.DB.getConfig('regulation_html'),
+        window.DB.getPrizes()
+      ]);
+      if(reg){
+        if(reg.regDays) regDays=reg.regDays;
+        if(reg.regLocked) regLocked=reg.regLocked;
+        if(reg.admPrizes) admPrizes=reg.admPrizes;
+        if(reg.company) savedRegData.company=reg.company;
+        if(reg.event) savedRegData.event=reg.event;
+        if(reg.event?.name) savedRegData.event.name=reg.event.name;
+        if(reg.admPrizes) savedRegData.admPrizes=reg.admPrizes;
+      }
+      const anyLoaded=seqLoads.some(s=>s&&s.length>0);
+      if(anyLoaded) regSequences=seqLoads.map(s=>s||[]);
+      savedRegData.regSequences=regSequences;
+      if(regHtml) savedRegData.regulationHtml=regHtml;
+      if(!admPrizes.length&&prizes.length){ admPrizes=prizes; savedRegData.admPrizes=prizes; }
+      buildRegulationModalText();
+      console.log('[EVORA] Background data loaded');
+    }catch(e){console.log('[EVORA] Background load error:',e);}
+  })();
 });
 
 // Start loader bar animation immediately when page loads — independent of Firebase
@@ -1068,11 +1107,15 @@ window.addEventListener('unhandledrejection', e=>{
     console.log('[EVORA] Loader bar starting');
     let pct = 0;
     const iv = setInterval(()=>{
-      if(pct < 70){
-        pct += Math.random() * 4 + 1;
+      if(window._firebaseReady){
+        // Firebase già pronto, vai veloce
+        pct += Math.random() * 25 + 15;
+      } else if(pct < 70){
+        pct += Math.random() * 8 + 3;
         if(pct > 70) pct = 70;
-      } else if(window._firebaseReady){
-        pct += Math.random() * 12 + 8;
+      } else {
+        // aspetta firebase ready
+        pct += 0.1;
         if(pct >= 100){
           pct = 100;
           loaderBar.style.width = '100%';
@@ -1502,6 +1545,11 @@ function showPrizesEnded(){
 
 // ── ALREADY PLAYED SCREEN ─────────────────────────────────────────────────
 function showAlreadyPlayed(){
+  // Se l'utente aveva vinto uno sconto, rimostra la schermata sconto
+  if(cAsgn && cAsgn.isDiscount){
+    showDiscountResult();
+    return;
+  }
   hideAll();showFooter();
   const pg=document.getElementById('pg-welcome');
   pg.classList.remove('hidden');
@@ -1681,6 +1729,11 @@ function updateTestModeUI(){
 }
 
 function showResult(){
+  // Se è uno sconto, mostra schermata speciale
+  if(cAsgn.isDiscount){
+    showDiscountResult();
+    return;
+  }
   transitionTo('pg-result');showFooter();
   document.getElementById('rem').textContent=cAsgn.prizeEmoji;
   document.getElementById('rnm').textContent=cAsgn.prizeName;
@@ -1691,6 +1744,63 @@ function showResult(){
   fireParticles();
   if(navigator.vibrate)navigator.vibrate([0,80,40,160,40,80]);
   if(!rtUnsub)rtUnsub=window.DB.listenAssignment(cUser.token,d=>{if(d.status==='delivered')showTY();});
+}
+
+function showDiscountResult(){
+  hideAll();showFooter();
+  const pg=document.getElementById('pg-welcome');
+  pg.classList.remove('hidden');
+  const code=cAsgn.discountCode||'EVORAFIERA15';
+  pg.innerHTML=`
+    <div style="text-align:center;width:100%;max-width:420px;padding:0 4px 60px;animation:fu .5s cubic-bezier(.16,1,.3,1) both">
+      <div style="display:flex;justify-content:center;width:100%;margin-bottom:32px"><img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA1OTUuMjggMjgyLjYyIj48cGF0aCBmaWxsPSIjZjBlZGU4IiBkPSJNMzEuNDgsOTQuMjFoNzEuMDV2MTguNDRINTIuMDd2MTkuMTFoNDQuNHYxOC40M0g1Mi4wN1YxNzBIMTAzLjJ2MTguNDRIMzEuNDhaIi8+PHBhdGggZmlsbD0iI2YwZWRlOCIgZD0iTTEyNi4yNiw5My44OGgyMi44N2wyNC42Myw2Ni4zNCwyNC42My02Ni4zNGgyMi4zM2wtMzguMDgsOTQuODdoLTE4LjNaIi8+PHBhdGggZmlsbD0iI2YwZWRlOCIgZD0iTTI0MCwxNDEuNTh2LS4yN2MwLTI2Ljc4LDIxLjEzLTQ4LjcxLDUwLjItNDguNzFzNDkuOTIsMjEuNjYsNDkuOTIsNDguNDR2LjI3QzM0MC4xNiwxNjguMDksMzE5LDE5MCwyOTAsMTkwUzI0MCwxNjguMzYsMjQwLDE0MS41OFptNzguNDYsMHYtLjI3YzAtMTYuMTUtMTEuODUtMjkuNi0yOC41My0yOS42UzI2MS43MSwxMjQuOSwyNjEuNzEsMTQxdi4yN2MwLDE2LjE1LDExLjg0LDI5LjYxLDI4LjUzLDI5LjYxUzMxOC41LDE1Ny43MywzMTguNSwxNDEuNThaIi8+PHBhdGggZmlsbD0iI2YwZWRlOCIgZD0iTTM2Nyw5NC4yMUg0MTBjMTIsMCwyMS4xMiwzLjIzLDI3LjQ1LDkuNTYsNS4zOCw1LjM4LDguMDcsMTIuNTEsOC4wNywyMS41M3YuMjdjMCwxNS4yLTguMjEsMjQuNzYtMjAuMTksMjkuMmwyMywzMy42NEg0MjQuMTRMNDA0LDE1OC4yN0gzODcuNjh2MzAuMTRIMzY3Wk00MDguNjcsMTQwYzEwLjIzLDAsMTUuODgtNS4yNSwxNS44OC0xMy4zM3YtLjI2YzAtOS02LjA2LTEzLjQ2LTE2LjI4LTEzLjQ2SDM4Ny42OFYxNDBaIi8+PHBhdGggZmlsbD0iI2YwZWRlOCIgZD0iTTUxMy44NywxMTguMWwtMjguOCw3MC42NUg0NjRsNDAuMzctOTQuODdoMTkuMWw0MC4zNyw5NC44N0g1NDIuMTNMNTEzLjg3LDExOC4xIi8+PC9zdmc+" alt="Evora" style="width:30vw;max-width:180px;height:auto;display:block"/></div>
+      
+      <div style="font-size:72px;margin-bottom:16px">🎟️</div>
+      
+      <div style="font-family:var(--fd);font-size:42px;font-weight:800;letter-spacing:2px;text-transform:uppercase;line-height:.95;margin-bottom:8px">
+        HAI VINTO
+      </div>
+      <div style="font-family:var(--fd);font-size:56px;font-weight:900;letter-spacing:1px;color:var(--red);line-height:.95;margin-bottom:24px">
+        SCONTO 15%
+      </div>
+      
+      <div style="font-family:var(--fs);font-size:14px;color:var(--g);margin-bottom:24px;line-height:1.6">
+        Su tutto lo shop online<br>Valido fino al <strong style="color:var(--w)">30 giugno 2026</strong>
+      </div>
+      
+      <div style="background:var(--s);border:2px dashed var(--red);padding:24px 16px;margin-bottom:20px;position:relative">
+        <div style="font-family:var(--fd);font-size:11px;letter-spacing:3px;color:var(--g);text-transform:uppercase;margin-bottom:10px">Il tuo codice</div>
+        <div id="discount-code-display" style="font-family:var(--fd);font-size:32px;font-weight:900;letter-spacing:3px;color:var(--w);margin-bottom:16px;word-break:break-all">${code}</div>
+        <button onclick="copyDiscountCode('${code}')" style="background:var(--red);color:white;border:none;padding:14px 24px;font-family:var(--fd);font-size:13px;letter-spacing:2px;font-weight:700;cursor:pointer;width:100%;text-transform:uppercase">
+          <span id="copy-btn-text">📋 COPIA CODICE</span>
+        </button>
+      </div>
+      
+      <a href="https://evorafitness.it" target="_blank" style="display:block;background:transparent;color:var(--w);border:1px solid var(--b);padding:14px 24px;font-family:var(--fd);font-size:13px;letter-spacing:2px;font-weight:700;text-decoration:none;text-transform:uppercase;margin-bottom:24px">
+        🛒 VAI ALLO SHOP →
+      </a>
+      
+      <div style="background:rgba(178,34,34,.06);border-left:3px solid var(--red);padding:14px 16px;text-align:left;margin-bottom:20px">
+        <div style="font-size:13px;color:#aaa;line-height:1.6">
+          <strong style="color:var(--w)">Grazie per aver giocato!</strong><br>
+          I gadget fisici sono terminati ma abbiamo riservato uno sconto speciale per te.
+        </div>
+      </div>
+      
+      <div style="font-family:var(--fd);font-size:10px;letter-spacing:3px;color:#444;text-transform:uppercase">© Evora Fitness</div>
+    </div>`;
+  
+  if(navigator.vibrate)navigator.vibrate([0,80,40,160,40,80]);
+}
+
+function copyDiscountCode(code){
+  navigator.clipboard?.writeText(code);
+  const btn=document.getElementById('copy-btn-text');
+  if(btn){
+    btn.textContent='✓ COPIATO';
+    if(navigator.vibrate)navigator.vibrate(40);
+    setTimeout(()=>{btn.textContent='📋 COPIA CODICE';},2000);
+  }
 }
 
 function showTY(){
@@ -2654,6 +2764,100 @@ function switchAdminTab(tab){
   if(panel) panel.classList.remove('hidden');
   // NO automatic data loading — user must click refresh
   if(tab==='qr' && (!qrSources || !qrSources.length)) loadQRSources();
+  if(tab==='emerg') loadEmergencyStatus();
+}
+
+// ── EMERGENCY EXTENSION FUNCTIONS ─────────────────────────────────────
+async function loadEmergencyStatus(){
+  const el=document.getElementById('emerg-status');
+  if(!el) return;
+  try{
+    const mainSnap=await window.DB.getDoc_("sequences","main");
+    const extSnap=await window.DB.getDoc_("sequences","emergency");
+    const mainLen=mainSnap?(mainSnap.prizes||[]).length:0;
+    const extLen=extSnap?(extSnap.prizes||[]).length:0;
+    
+    // Conta giocate effettive
+    const allAsgn=await window.DB.getAllAssignments();
+    const realCount=allAsgn.filter(a=>!a._ref&&!a.isTest).length;
+    
+    const baseDone=Math.min(realCount,mainLen);
+    const emergDone=Math.max(0,realCount-mainLen);
+    
+    el.innerHTML=`
+      <div style="margin-bottom:8px"><strong style="color:var(--w)">📊 Stato attuale:</strong></div>
+      <div style="margin-bottom:4px">• Sequenza principale: <strong style="color:var(--w)">${baseDone}/${mainLen}</strong> ${baseDone>=mainLen&&mainLen>0?'<span style="color:#f5a623">(esaurita)</span>':''}</div>
+      <div style="margin-bottom:4px">• Estensioni emergenza: <strong style="color:var(--w)">${emergDone}/${extLen}</strong></div>
+      <div style="margin-top:8px">• Totale slot disponibili: <strong style="color:#4ecdc4">${mainLen+extLen-realCount}</strong></div>
+    `;
+  }catch(e){
+    el.innerHTML='<div style="color:#f66">Errore caricamento stato</div>';
+    console.log("[Emergency] Load error:",e);
+  }
+}
+
+async function addEmergencyExtension(){
+  const total=parseInt(document.getElementById('emerg-total').value)||0;
+  const bags=parseInt(document.getElementById('emerg-bags').value)||0;
+  const msg=document.getElementById('emerg-msg');
+  
+  if(total<1){
+    msg.innerHTML='<span style="color:#f66">⚠ Inserisci almeno 1 giocata</span>';
+    return;
+  }
+  if(bags>total){
+    msg.innerHTML='<span style="color:#f66">⚠ Non puoi mettere più zaini delle giocate totali</span>';
+    return;
+  }
+  
+  if(!confirm(`Aggiungo ${total} giocate extra (${bags} zaini + ${total-bags} sconti)?\n\nQuesta azione non si può annullare.`)){
+    return;
+  }
+  
+  msg.innerHTML='<span style="color:#aaa">Generazione in corso...</span>';
+  
+  try{
+    // Carica eventuale estensione esistente per concatenare
+    const existing=await window.DB.getDoc_("sequences","emergency");
+    const existingPrizes=existing?(existing.prizes||[]):[];
+    
+    // Genera nuovi slot
+    const newSlots=[];
+    for(let i=0;i<bags;i++){
+      newSlots.push({name:'Zaino Evora',emoji:'🎒',value:59,type:'prize'});
+    }
+    const discountCount=total-bags;
+    for(let i=0;i<discountCount;i++){
+      newSlots.push({
+        name:'Sconto 15%',
+        emoji:'🎟️',
+        value:0,
+        type:'discount',
+        discountCode:'EVORAFIERA15'
+      });
+    }
+    
+    // Mescola i nuovi slot
+    const seed=Date.now()%1000000;
+    const shuffled=seededShuffle(newSlots,seed);
+    
+    // Concatena con eventuali estensioni precedenti
+    const finalSeq=[...existingPrizes,...shuffled];
+    
+    // Salva
+    await window.DB.saveDaySequence("emergency",finalSeq);
+    
+    msg.innerHTML='<span style="color:#4ecdc4">✓ Estensione aggiunta con successo!</span>';
+    document.getElementById('emerg-total').value='';
+    document.getElementById('emerg-bags').value='1';
+    
+    // Aggiorna stato
+    setTimeout(()=>{loadEmergencyStatus();msg.innerHTML='';},2000);
+    
+  }catch(e){
+    console.error("[Emergency] Error:",e);
+    msg.innerHTML='<span style="color:#f66">❌ Errore durante il salvataggio</span>';
+  }
 }
 
 function renderQRSources(){
