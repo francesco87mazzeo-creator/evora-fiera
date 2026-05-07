@@ -844,6 +844,9 @@ let testModeReplay=false;  // bypasses already-played block
 let testModeDate=false;    // bypasses date check
 let selectedTestDay=-1;    // -1 = not selected, 0-3 = day index for simulation
 
+// Base URL for QR codes — update this with your Shopify page URL
+const SHOPIFY_FORM_URL = 'https://evorafitness.it/pages/fiera-rimini-wellness-2026';
+
 const params=new URLSearchParams(window.location.search);
 const uName=params.get('name')||params.get('first_name')||'Ospite';
 const uEmail=params.get('email')||'';
@@ -2541,7 +2544,7 @@ function renderQRSources(){
     el.innerHTML = '<div style="color:var(--g);font-size:13px;padding:12px 0">Nessun QR creato. Aggiungine uno.</div>';
     return;
   }
-  const formUrl = 'https://evorafitness.it/pages/rimini-wellness-2026';
+  const formUrl = SHOPIFY_FORM_URL;
   el.innerHTML = qrSources.map((src,i)=>`
     <div style="background:#0a0a0a;border:1px solid var(--b);padding:14px;margin-bottom:8px">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
@@ -2558,7 +2561,7 @@ function renderQRSources(){
 }
 
 function copyQRUrl(id){
-  const formUrl = 'https://evorafitness.it/pages/rimini-wellness-2026';
+  const formUrl = SHOPIFY_FORM_URL;
   const url = `${formUrl}?ref=${encodeURIComponent(id)}`;
   if(navigator.clipboard) navigator.clipboard.writeText(url);
   if(navigator.vibrate) navigator.vibrate(40);
