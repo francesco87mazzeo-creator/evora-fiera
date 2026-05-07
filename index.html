@@ -893,7 +893,7 @@ if(isQRScanMode){
   // Usa fetch diretto alle API REST di Firestore
   (async function(){
     const FIREBASE_PROJECT = 'evora-fiera';
-    const FIREBASE_API_KEY = 'AIzaSyDEZ4g80FLlxi-kL7oqiCqJiXtyI_UDxqw';
+    const FIREBASE_API_KEY = 'AIzaSyBeHgXy0V1YqIWP8HruIZ4rztIaNfXsUxk';
     const scanId = 'scan_' + uRef + '_' + Date.now() + '_' + Math.random().toString(36).substr(2,5);
     const url = `https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT}/databases/(default)/documents/scans/${scanId}?key=${FIREBASE_API_KEY}`;
     
