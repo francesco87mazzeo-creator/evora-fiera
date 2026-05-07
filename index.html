@@ -1108,24 +1108,29 @@ window.addEventListener('unhandledrejection', e=>{
     let pct = 0;
     const iv = setInterval(()=>{
       if(window._firebaseReady){
-        // Firebase già pronto, vai veloce
+        // Firebase pronto: vai veloce a 100
         pct += Math.random() * 25 + 15;
       } else if(pct < 70){
+        // Firebase non pronto: avanza fino a 70 e aspetta
         pct += Math.random() * 8 + 3;
         if(pct > 70) pct = 70;
       } else {
-        // aspetta firebase ready
-        pct += 0.1;
-        if(pct >= 100){
-          pct = 100;
-          loaderBar.style.width = '100%';
-          clearInterval(iv);
-          window._loaderBarDone = true;
-          console.log('[EVORA] Loader done, calling showApp');
-          if(window._firebaseReady) showApp();
-          return;
-        }
+        // pct >= 70 ma firebase non pronto: avanza piano
+        pct += 0.5;
+        if(pct > 95) pct = 95; // non superare 95 senza firebase ready
       }
+      
+      // Check completamento (vale per qualsiasi ramo)
+      if(pct >= 100){
+        pct = 100;
+        loaderBar.style.width = '100%';
+        clearInterval(iv);
+        window._loaderBarDone = true;
+        console.log('[EVORA] Loader done, calling showApp');
+        showApp();
+        return;
+      }
+      
       loaderBar.style.width = Math.min(pct, 100) + '%';
     }, 60);
   }
