@@ -46,7 +46,7 @@
         }
       }
       // ═══════════════════════════════════════════════════════════════════
-      // RANGE MODE: counter GLOBALE, avanza al range successivo quando esaurito
+      // SEQUENZA UNICA + EMERGENCY: counter globale incrementale
       // ═══════════════════════════════════════════════════════════════════
       // In TEST MODE generiamo un primaryKey univoco così le giocate non si sovrascrivono
       const realPrimaryKey = testMode 
@@ -54,78 +54,82 @@
         : primaryKey;
       
       async function savePointers(asgn){
-        // In test mode NON salviamo pointer, così non bloccano future giocate test
-        if(testMode) return;
+        if(testMode) return; // niente pointer in test mode
         if(customerId&&customerId!==realPrimaryKey) try{await setDoc(doc(db,"assignments",customerId),{_ref:realPrimaryKey,shopifyCustomerId:customerId,assignedAt:asgn.assignedAt});}catch(e){}
         if(emailKey&&emailKey!==realPrimaryKey) try{await setDoc(doc(db,"assignments",emailKey),{_ref:realPrimaryKey,userEmail:email,assignedAt:asgn.assignedAt});}catch(e){}
         if(token&&token!==realPrimaryKey&&token!==customerId) try{await setDoc(doc(db,"assignments",token),{_ref:realPrimaryKey,deviceToken:token,assignedAt:asgn.assignedAt});}catch(e){}
         if(fingerprint) try{await setDoc(doc(db,"assignments",'fp_'+fingerprint),{_ref:realPrimaryKey,assignedAt:asgn.assignedAt});}catch(e){}
       }
       
-      // Carica TUTTE le sequenze (4 range)
-      const allSeqs=[];
-      for(let i=0;i<4;i++){
-        try{
-          const seqSnap=await getDoc(doc(db,"sequences","day"+i));
-          allSeqs.push(seqSnap.exists()?(seqSnap.data().prizes||[]):[]);
-        }catch(e){allSeqs.push([]);}
-      }
-      console.log("[assignPrize] Sequenze caricate:",allSeqs.map(s=>s.length));
+      // Carica sequenza principale + estensioni emergenza
+      const [mainSnap, extSnap] = await Promise.all([
+        getDoc(doc(db,"sequences","main")),
+        getDoc(doc(db,"sequences","emergency"))
+      ]);
+      const mainSeq = mainSnap.exists() ? (mainSnap.data().prizes||[]) : [];
+      const extSeq = extSnap.exists() ? (extSnap.data().prizes||[]) : [];
+      const fullSeq = [...mainSeq, ...extSeq];
+      console.log("[assignPrize] Main:",mainSeq.length,"Emergency:",extSeq.length,"Totale slot:",fullSeq.length);
       
-      // Conta TUTTI i premi assegnati per ciascun range (escludendo pointer e test)
-      const allAsgnRange=await getDocs(collection(db,"assignments"));
-      const counts=[0,0,0,0];
+      if(fullSeq.length === 0){
+        console.log("[assignPrize] Nessuna sequenza disponibile - genera prima i premi");
+        return null;
+      }
+      
+      // Conta giocate effettive (escludendo pointer)
+      const allAsgnRange = await getDocs(collection(db,"assignments"));
+      let count = 0;
       allAsgnRange.docs.forEach(d=>{
-        const a=d.data();
-        if(a._ref)return; // skip pointer docs
+        const a = d.data();
+        if(a._ref) return; // skip pointer
         if(testMode){
-          if(a.isTest&&typeof a.dayIndex==='number'&&a.dayIndex>=0&&a.dayIndex<4)counts[a.dayIndex]++;
+          if(a.isTest) count++;
         }else{
-          if(!a.isTest&&typeof a.dayIndex==='number'&&a.dayIndex>=0&&a.dayIndex<4)counts[a.dayIndex]++;
+          if(!a.isTest) count++;
         }
       });
-      console.log("[assignPrize] Premi già assegnati per range:",counts);
-      console.log("[assignPrize] Test mode:",testMode,"primaryKey:",primaryKey,"realPrimaryKey:",realPrimaryKey);
-      console.log("[assignPrize] Total docs in assignments:",allAsgnRange.docs.length);
-      // Lista tutti i documenti per debug
-      allAsgnRange.docs.forEach(d=>{
-        const a=d.data();
-        if(a._ref) console.log("  POINTER:",d.id,"→",a._ref);
-        else console.log("  DOC:",d.id,"dayIndex:",a.dayIndex,"isTest:",a.isTest,"seqPos:",a.seqPosition,"prize:",a.prizeName);
-      });
+      console.log("[assignPrize] Giocate effettive:",count,"/ totale:",fullSeq.length);
       
-      // Determina quale range usare
-      let dayIndex=forceDayIndex;
-      if(dayIndex<0){
-        // Trova il PRIMO range con slot ancora disponibili
-        for(let i=0;i<4;i++){
-          if(allSeqs[i].length>0&&counts[i]<allSeqs[i].length){
-            dayIndex=i;
-            console.log("[assignPrize] Range selezionato:",i,"counts:",counts[i],"/",allSeqs[i].length);
-            break;
-          }
-        }
-      }
-      
-      // Se nessun range ha slot, ritorna null (premi esauriti)
-      if(dayIndex<0||!allSeqs[dayIndex]||allSeqs[dayIndex].length===0){
-        console.log("[assignPrize] Nessun range disponibile - tutti esauriti");
+      // Premi esauriti?
+      if(count >= fullSeq.length){
+        console.log("[assignPrize] Tutti gli slot sono stati utilizzati");
         return null;
       }
       
-      const daySeq=allSeqs[dayIndex];
-      const seqPosition=counts[dayIndex]; // posizione nel range corrente
+      // Posizione nella sequenza globale
+      const seqPosition = count;
+      const prize = fullSeq[seqPosition];
+      const isEmergency = seqPosition >= mainSeq.length;
+      console.log("[assignPrize] Posizione:",seqPosition,"Premio:",prize.name,"Emergency:",isEmergency);
       
-      if(seqPosition>=daySeq.length){
-        console.log("[assignPrize] Range",dayIndex,"esaurito");
-        return null;
-      }
+      const code = `EVR-${(seqPosition+1).toString().padStart(4,'0')}-${Math.random().toString(36).substring(2,6).toUpperCase()}`;
+      const isDiscount = prize.type === 'discount';
       
-      const prize=daySeq[seqPosition];
-      const code=`EVR-R${dayIndex+1}-${Math.random().toString(36).substring(2,6).toUpperCase()}`;
-      const asgn={id:realPrimaryKey,shopifyCustomerId:customerId||'',userToken:token,userName:name,userEmail:email||token,deviceToken:token,deviceFingerprint:fingerprint||'',prizeId:`range${dayIndex}_pos${seqPosition}`,prizeName:prize.name,prizeEmoji:prize.emoji||'🎁',prizeDesc:prize.name,prizeColor:'#B22222',code,status:"assigned",assignedAt:new Date().toISOString(),deliveredAt:null,dayIndex,seqPosition,isTest:testMode||false,ref:ref||''};
+      const asgn = {
+        id: realPrimaryKey,
+        shopifyCustomerId: customerId||'',
+        userToken: token,
+        userName: name,
+        userEmail: email||token,
+        deviceToken: token,
+        deviceFingerprint: fingerprint||'',
+        prizeId: `pos_${seqPosition}`,
+        prizeName: prize.name,
+        prizeEmoji: prize.emoji||'🎁',
+        prizeDesc: prize.name,
+        prizeColor: '#B22222',
+        code,
+        status: isDiscount ? "delivered" : "assigned",
+        assignedAt: new Date().toISOString(),
+        deliveredAt: isDiscount ? new Date().toISOString() : null,
+        seqPosition,
+        isEmergency,
+        isTest: testMode||false,
+        ref: ref||'',
+        isDiscount,
+        discountCode: isDiscount ? (prize.discountCode||'EVORAFIERA15') : ''
+      };
       await setDoc(doc(db,"assignments",realPrimaryKey),asgn);
-      // Pointer salvati solo in modalità reale (non test)
       if(!testMode){await savePointers(asgn);}
       try{const td=new Date().toISOString().slice(0,10);await setDoc(doc(db,"config","daily_stats"),{[td]:increment(1)},{merge:true});}catch(e){}
       return asgn;
@@ -199,8 +203,10 @@
 
     // Save a single day's sequence as its own document: sequences/day0, day1, etc.
     async function saveDaySequence(dayIndex, prizes){
-      // Se dayIndex è "main" salva direttamente come "main", altrimenti "day"+dayIndex
-      const docName = dayIndex==="main" ? "main" : "day"+dayIndex;
+      // Se dayIndex è una stringa (es. "main", "emergency") salva con quel nome
+      // Se è un numero (0,1,2,3) salva come "day0", "day1", ecc.
+      const docName = typeof dayIndex === "string" ? dayIndex : "day"+dayIndex;
+      console.log("[saveDaySequence] Salvataggio in sequences/"+docName+" con",prizes.length,"premi");
       await setDoc(doc(db,"sequences",docName),{prizes, savedAt:new Date().toISOString()});
     }
 
@@ -212,9 +218,10 @@
       // 2. Reset assigned counters on prizes (keep prize config, just zero the counter)
       const prSnap=await getDocs(collection(db,"prizes"));
       await Promise.all(prSnap.docs.map(d=>updateDoc(doc(db,"prizes",d.id),{assigned:0})));
-      // 2b. Cancella anche la sequenza unica
+      // 2b. Cancella anche le sequenze
       try{await deleteDoc(doc(db,"sequences","main"));}catch(e){}
       try{await deleteDoc(doc(db,"sequences","emergency"));}catch(e){}
+      try{await deleteDoc(doc(db,"sequences","dayemergency"));}catch(e){} // cleanup bug precedente
       for(let i=0;i<4;i++){try{await deleteDoc(doc(db,"sequences","day"+i));}catch(e){}}
       // 3. Delete regulation config
       try{await deleteDoc(doc(db,"config","regulation"));}catch(e){}
