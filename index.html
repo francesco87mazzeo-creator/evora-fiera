@@ -1,4 +1,4 @@
-<!DOCTYPE html> 
+<!DOCTYPE html>
 <html lang="it">
 <head>
   <meta charset="UTF-8"/>
@@ -34,11 +34,12 @@
       }
     }
 
-    async function assignPrize(token,name,email,testMode=false,forceDayIndex=-1,ref=""){
+    async function assignPrize(token,name,email,testMode=false,forceDayIndex=-1,ref="",customerId="",fingerprint=""){
       const emailKey=email?'email_'+email.toLowerCase().replace(/[^a-z0-9]/g,'_'):null;
-      const primaryKey=emailKey||token;
+      // Priority: Shopify customer_id > email key > device token
+      const primaryKey=customerId||emailKey||token;
       if(!testMode){
-        for(const k of [emailKey,token].filter(Boolean)){
+        for(const k of [customerId,emailKey,token,fingerprint?'fp_'+fingerprint:null].filter(Boolean)){
           try{const ex=await getDoc(doc(db,"assignments",k));if(ex.exists()&&!ex.data()._ref)return ex.data();}catch(e){}
         }
       }
@@ -49,6 +50,12 @@
         const fdSnap=await getDoc(doc(db,"config","fairDates"));
         const fairDates=fdSnap.exists()?fdSnap.data().value:[];
         dayIndex=fairDates.indexOf(ts);
+      }
+      async function savePointers(asgn){
+        if(customerId&&customerId!==primaryKey) try{await setDoc(doc(db,"assignments",customerId),{_ref:primaryKey,shopifyCustomerId:customerId,assignedAt:asgn.assignedAt});}catch(e){}
+        if(emailKey&&emailKey!==primaryKey) try{await setDoc(doc(db,"assignments",emailKey),{_ref:primaryKey,userEmail:email,assignedAt:asgn.assignedAt});}catch(e){}
+        if(token&&token!==primaryKey&&token!==customerId) try{await setDoc(doc(db,"assignments",token),{_ref:primaryKey,deviceToken:token,assignedAt:asgn.assignedAt});}catch(e){}
+        if(fingerprint) try{await setDoc(doc(db,"assignments",'fp_'+fingerprint),{_ref:primaryKey,assignedAt:asgn.assignedAt});}catch(e){}
       }
       if(dayIndex>=0){
         const seqSnap=await getDoc(doc(db,"sequences","day"+dayIndex));
@@ -67,9 +74,9 @@
             if(countToday<daySeq.length){
               const prize=daySeq[countToday];
               const code=`EVR-G${dayIndex+1}-${Math.random().toString(36).substring(2,6).toUpperCase()}`;
-              const asgn={id:primaryKey,userToken:token,userName:name,userEmail:email||token,deviceToken:token,prizeId:`day${dayIndex}_pos${countToday}`,prizeName:prize.name,prizeEmoji:prize.emoji||'🎁',prizeDesc:prize.name,prizeColor:'#B22222',code,status:"assigned",assignedAt:new Date().toISOString(),deliveredAt:null,dayIndex,seqPosition:countToday,isTest:testMode||false,ref:ref||''};
+              const asgn={id:primaryKey,shopifyCustomerId:customerId||'',userToken:token,userName:name,userEmail:email||token,deviceToken:token,deviceFingerprint:fingerprint||'',prizeId:`day${dayIndex}_pos${countToday}`,prizeName:prize.name,prizeEmoji:prize.emoji||'🎁',prizeDesc:prize.name,prizeColor:'#B22222',code,status:"assigned",assignedAt:new Date().toISOString(),deliveredAt:null,dayIndex,seqPosition:countToday,isTest:testMode||false,ref:ref||''};
               await setDoc(doc(db,"assignments",primaryKey),asgn);
-              if(token&&token!==primaryKey)await setDoc(doc(db,"assignments",token),{_ref:primaryKey,userEmail:email,deviceToken:token,assignedAt:asgn.assignedAt});
+              await savePointers(asgn);
               try{const td=new Date().toISOString().slice(0,10);await setDoc(doc(db,"config","daily_stats"),{[td]:increment(1)},{merge:true});}catch(e){}
               return asgn;
             }else{return null;}
@@ -80,13 +87,13 @@
       const avail=snap.docs.map(d=>({id:d.id,...d.data()})).find(p=>p.assigned<p.qty);
       if(!avail)return null;
       const code=`EVR-${avail.id.toUpperCase()}-${Math.random().toString(36).substring(2,6).toUpperCase()}`;
-      const asgn={id:primaryKey,userToken:token,userName:name,userEmail:email||token,deviceToken:token,prizeId:avail.id,prizeName:avail.name,prizeEmoji:avail.emoji,prizeDesc:avail.desc||avail.name,prizeColor:avail.color,code,status:"assigned",assignedAt:new Date().toISOString(),deliveredAt:null,isTest:testMode||false,ref:ref||''};
+      const asgn={id:primaryKey,shopifyCustomerId:customerId||'',userToken:token,userName:name,userEmail:email||token,deviceToken:token,deviceFingerprint:fingerprint||'',prizeId:avail.id,prizeName:avail.name,prizeEmoji:avail.emoji,prizeDesc:avail.desc||avail.name,prizeColor:avail.color,code,status:"assigned",assignedAt:new Date().toISOString(),deliveredAt:null,isTest:testMode||false,ref:ref||''};
       await runTransaction(db,async tx=>{
         const pr=doc(db,"prizes",avail.id);const f=await tx.get(pr);
         if(f.data().assigned>=f.data().qty)throw new Error("exhausted");
         tx.update(pr,{assigned:f.data().assigned+1});tx.set(doc(db,"assignments",primaryKey),asgn);
       });
-      if(token&&token!==primaryKey)await setDoc(doc(db,"assignments",token),{_ref:primaryKey,userEmail:email,deviceToken:token,assignedAt:asgn.assignedAt});
+      await savePointers(asgn);
       try{const td=new Date().toISOString().slice(0,10);await setDoc(doc(db,"config","daily_stats"),{[td]:increment(1)},{merge:true});}catch(e){}
       return asgn;
     }
@@ -829,7 +836,7 @@ let cUser=null,cAsgn=null,allAsgn=[],cFlt='all',cSrch='',pendId=null;
 // Initialize cUser immediately so showWelcome doesn't crash before db-ready
 function _initCUserEarly(){
   if(!cUser){
-    cUser = {token:uToken, name:uName, email:uEmail, fingerprint:'pending', ref:uRef};
+    cUser = {token:uToken, customerId:uCustomerId, name:uName, email:uEmail, fingerprint:'pending', ref:uRef};
   }
 }
 let scanStream=null,scanActive=false,rtUnsub=null,admPrizes=[];
@@ -840,9 +847,14 @@ let selectedTestDay=-1;    // -1 = not selected, 0-3 = day index for simulation
 const params=new URLSearchParams(window.location.search);
 const uName=params.get('name')||params.get('first_name')||'Ospite';
 const uEmail=params.get('email')||'';
-const uToken=params.get('token')||`demo_${Date.now()}`;
 const uRef=params.get('ref')||''; // QR tracking source
-window._uRef=uRef; // expose to Firebase module
+
+// Shopify customer_id è il token primario (da link email Flow)
+// Fallback: token device legacy (per test / accesso diretto)
+const uCustomerId=params.get('customer_id')||'';
+const uToken=uCustomerId || params.get('token') || `demo_${Date.now()}`;
+
+window._uRef=uRef;
 _initCUserEarly();
 
 // ── REGULATION STATE ──────────────────────────────────────────────────────
@@ -879,16 +891,15 @@ function generateFingerprint(){
 }
 
 // ── BOOT ──────────────────────────────────────────────────────────────────
-// Track QR scan: save when ref is present AND token present (= compiled form after QR scan)
-// This is the correct moment: user scanned QR → filled form → arrived here with both ref + token
+// Track QR scan: save when ref is present AND customer_id present
 window.addEventListener('db-ready', async()=>{
-  if(window._uRef && params.get('token')){
+  if(window._uRef && (params.get('customer_id')||params.get('token'))){
     try{ await window.DB.saveScan(window._uRef); }catch(e){}
   }
 });
 window.addEventListener('db-ready',async()=>{
   const uFingerprint=generateFingerprint();
-  cUser={token:uToken,name:uName,email:uEmail,fingerprint:uFingerprint,ref:uRef};
+  cUser={token:uToken,customerId:uCustomerId,name:uName,email:uEmail,fingerprint:uFingerprint,ref:uRef};
   try{const p=await window.DB.getConfig('passwords');if(p)PWD=p;}catch(e){}
   // Load test mode states
   try{const tm=await window.DB.getConfig('testMode');if(tm&&typeof tm==='object'){testModeReplay=!!tm.replay;testModeDate=!!tm.date;if(typeof tm.day==='number')selectedTestDay=tm.day;}}catch(e){}
@@ -1344,7 +1355,7 @@ async function doShowGame(){
 
   // ── CHECK IF ALREADY PLAYED (skip if replay test mode on) ────────────────
   if(!testModeReplay){
-    const prev=await window.DB.checkAlreadyPlayed(cUser.token, cUser.email, cUser.fingerprint);
+    const prev=await window.DB.checkAlreadyPlayed(cUser.customerId||cUser.token, cUser.email, cUser.fingerprint);
     if(prev){
       cAsgn=prev;
       showAlreadyPlayed();
@@ -1356,12 +1367,9 @@ async function doShowGame(){
   hideAll(); show('pg-game'); showFooter();
   try{
     const dayOverride=testModeDate&&selectedTestDay>=0?selectedTestDay:-1;
-    cAsgn=await window.DB.assignPrize(cUser.token,cUser.name,cUser.email,testModeReplay,dayOverride,uRef);
+    cAsgn=await window.DB.assignPrize(cUser.token,cUser.name,cUser.email,testModeReplay,dayOverride,uRef,cUser.customerId||"",cUser.fingerprint||"");
     if(!cAsgn){alert('Tutti i premi sono esauriti per oggi. Grazie per aver partecipato!');showWelcome();return;}
-    // Save fingerprint pointer so same device is blocked even with different email
-    if(cUser.fingerprint && cAsgn.id){
-      saveFingerprint(cUser.fingerprint, cAsgn.id, cUser.email, cAsgn.assignedAt);
-    }
+    // Fingerprint pointer saved inside assignPrize via savePointers()
   }catch(e){alert('Errore di connessione. Riprova.');showWelcome();return;}
   document.getElementById('tnum').textContent='#'+cAsgn.id.slice(-6).toUpperCase();
   document.getElementById('tser').textContent=`EVR · 2026 · ${cAsgn.code}`;
