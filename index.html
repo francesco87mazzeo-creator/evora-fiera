@@ -1456,26 +1456,10 @@ async function doShowGame(){
     }
   }catch(e){}
 
-  // Read fair dates
-  let fairDates=[];
-  try{
-    const fd=await window.DB.getConfig('fairDates');
-    if(fd&&fd.length>0){
-      fairDates=fd;
-    } else {
-      const reg=await window.DB.getConfig('regulation');
-      if(reg&&reg.regDays&&reg.regDays.length>0){
-        regDays=reg.regDays;
-        fairDates=reg.regDays.map(d=>d.date).filter(Boolean);
-      }
-    }
-  }catch(e){}
-
-  // ── DATE CHECK DISABLED — gioco sempre attivo, range guidano la sequenza ──
-  const today=todayStr();
-  const dateOk = true; // SEMPRE attivo, no più check date
-
+  // ── DATE CHECK DISABLED — gioco sempre attivo, sequenza guida l'avanzamento ──
+  const dateOk = true;
   if(!dateOk){
+    let fairDates=[]; const today=todayStr();
     const months=['','gennaio','febbraio','marzo','aprile','maggio','giugno','luglio','agosto','settembre','ottobre','novembre','dicembre'];
     const label=fairDates.map(d=>{
       const p=d.split('-');
@@ -1640,7 +1624,7 @@ function applyTestModeBanner(){
 }
 
 async function saveTestMode(){
-  await window.DB.saveConfig('testMode',{replay:testModeReplay,date:testModeDate,day:selectedTestDay});
+  await window.DB.saveConfig('testMode',{replay:testModeReplay,date:testModeDate});
 }
 
 async function toggleTestReplay(){
@@ -2104,6 +2088,20 @@ async function showAdminPage(){
   updateTestModeUI();
   await loadQRSources();
   switchAdminTab('quick'); // start on Quick Stats tab
+  // Cleanup config obsoleti (silent)
+  cleanupObsoleteConfig();
+}
+
+// Rimuove documenti config non più usati dalla v24
+async function cleanupObsoleteConfig(){
+  try{
+    // fairDates: non serve più (non c'è date check)
+    const fd = await window.DB.getConfig('fairDates');
+    if(fd){
+      await window.DB.saveConfig('fairDates', null); // azzera (ma non cancella il doc)
+      console.log('[Cleanup] fairDates azzerato');
+    }
+  }catch(e){}
 }
 async function loadPrizes(){try{admPrizes=await window.DB.getPrizes();renderPCfg();}catch(e){}}
 function renderPCfg(){
@@ -2372,11 +2370,7 @@ async function generateRegulation(){
   buildRegulationModalText();
   await saveRegulationConfig();
 
-  // ── Save fair dates for fast date check ───────────────────────────────
-  const fairDates=regDays.map(d=>d.date).filter(Boolean);
-  await window.DB.saveConfig('fairDates', fairDates);
-
-  // ── Save each range sequence as a SEPARATE Firebase document ─────────
+  // ── Save each range sequence as a SEPARATE Firebase document (per allegati regolamento) ─
   for(let i=0;i<regSequences.length;i++){
     await window.DB.saveDaySequence(i, regSequences[i]);
   }
@@ -2594,7 +2588,20 @@ async function dashRefresh(force){
       window.DB.getAllScans ? window.DB.getAllScans() : Promise.resolve([]),
       window.DB.getPrizes()
     ]);
-    _dashCache = {assignments, scans, prizes, loadedAt: new Date()};
+    // Calcola totali per nome dalla sequenza main + emergency
+    const _seqTotals = {};
+    try{
+      const [mainSnap, extSnap] = await Promise.all([
+        window.DB.getDoc_("sequences","main"),
+        window.DB.getDoc_("sequences","emergency")
+      ]);
+      const allSeq = [...((mainSnap&&mainSnap.prizes)||[]), ...((extSnap&&extSnap.prizes)||[])];
+      allSeq.forEach(p=>{
+        const n = p.name || 'Sconosciuto';
+        _seqTotals[n] = (_seqTotals[n]||0) + 1;
+      });
+    }catch(e){ console.log("[Dash] seqTotals error:",e); }
+    _dashCache = {assignments, scans, prizes, _seqTotals, loadedAt: new Date()};
 
     state.count++;
     state.date = new Date().toISOString().slice(0,10);
@@ -2694,6 +2701,7 @@ function renderDashboard(){
 
   const prizeEl = document.getElementById('dash-prizes');
   if(prizeEl){
+    // Conta i premi assegnati per nome
     const byPrize = {};
     filtAsgn.forEach(a=>{
       const name = a.prizeName || 'Sconosciuto';
@@ -2701,24 +2709,32 @@ function renderDashboard(){
       byPrize[name].total++;
       if(a.status==='delivered') byPrize[name].delivered++;
     });
+    
+    // Conta i totali nella sequenza (main + emergency) per nome
+    const seqTotals = _dashCache._seqTotals || {};
+    
     if(Object.keys(byPrize).length === 0){
       prizeEl.innerHTML = '<div style="color:var(--g);font-size:13px">Nessun premio assegnato ancora.</div>';
     } else {
       prizeEl.innerHTML = Object.entries(byPrize).map(([name,data])=>{
-        const prize = (prizes||[]).find(p=>p.name===name);
-        const qty = prize ? prize.qty : data.total;
-        const pct = qty > 0 ? Math.round(data.total/qty*100) : 100;
-        const exhausted = prize && prize.assigned >= prize.qty;
+        // Quantità totale prevista nella sequenza
+        const qtyInSeq = seqTotals[name] || 0;
+        // Se il nome non è nella sequenza (es. premi storici), usa i dati assegnati come fallback
+        const qty = qtyInSeq > 0 ? qtyInSeq : data.total;
+        // % consegnati su totale previsto (NON % assegnati)
+        const pctDelivered = qty > 0 ? Math.round(data.delivered/qty*100) : 0;
+        const exhausted = data.total >= qty;
         return `<div style="margin-bottom:12px">
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
             <span style="font-size:13px">${name}</span>
             <span style="display:flex;gap:8px;align-items:center">
-              <span style="font-size:11px;color:var(--g)">${data.delivered}/${data.total} ritirati</span>
+              <span style="font-size:11px;color:var(--g)">${data.delivered}/${qty} ritirati</span>
               <span style="font-family:var(--fd);font-size:12px;font-weight:700">${data.total}/${qty}</span>
-              ${exhausted ? '<span style="font-size:9px;background:rgba(255,107,107,.2);color:#ff6b6b;padding:2px 6px;letter-spacing:1px">ESAURITO</span>' : ''}
+              ${exhausted && data.delivered < qty ? '<span style="font-size:9px;background:rgba(245,166,35,.2);color:#f5a623;padding:2px 6px;letter-spacing:1px">DA RITIRARE</span>' : ''}
+              ${data.delivered >= qty && qty > 0 ? '<span style="font-size:9px;background:rgba(78,205,196,.2);color:#4ecdc4;padding:2px 6px;letter-spacing:1px">COMPLETATO</span>' : ''}
             </span>
           </div>
-          <div class="funnel-track"><div class="funnel-fill" style="width:${pct}%;background:linear-gradient(90deg,var(--red),#cc3333)"></div></div>
+          <div class="funnel-track"><div class="funnel-fill" style="width:${pctDelivered}%;background:linear-gradient(90deg,var(--red),#cc3333)"></div></div>
         </div>`;
       }).join('');
     }
@@ -2731,7 +2747,18 @@ async function quickStatsRefresh(){
   const btn = document.querySelector('[onclick="quickStatsRefresh()"]');
   if(btn){ btn.disabled=true; btn.textContent='⏳ Caricamento…'; }
   try{
-    const stats = await window.DB.getDailyStats(); // 1 lettura sola
+    // Conta direttamente da assignments per coerenza con dashboard
+    const allAsgn = await window.DB.getAllAssignments();
+    const realAsgn = allAsgn.filter(a=>a && !a._ref && !a.isTest);
+    
+    // Conta giocate per data
+    const stats = {};
+    realAsgn.forEach(a=>{
+      if(!a.assignedAt) return;
+      const date = a.assignedAt.slice(0,10);
+      stats[date] = (stats[date]||0) + 1;
+    });
+    
     const today = new Date().toISOString().slice(0,10);
     // Today
     const todayCount = stats[today] || 0;
