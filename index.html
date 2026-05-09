@@ -1257,6 +1257,15 @@ function fmtDate(d){
 
 // Build regulation modal content with full sequences, day tabs
 function buildRegulationModalText(){
+  // Safety check: inizializza se non sono array
+  if(!Array.isArray(regDays)){
+    console.log('[buildRegulationModalText] regDays non array, init');
+    regDays=DEFAULT_DATES.map(date=>({date,dist:[]}));
+  }
+  if(!Array.isArray(regSequences)){
+    console.log('[buildRegulationModalText] regSequences non array, init');
+    regSequences=[[],[],[],[]];
+  }
   const hasSeq=regSequences.some(s=>s&&s.length>0);
   const evName=(document.getElementById('rg-event')?.value)||(savedRegData.event?.name)||'[nome evento]';
   const coName=(document.getElementById('rg-name')?.value)||(savedRegData.company?.name)||'';
@@ -2436,14 +2445,16 @@ function renderRegOutput(){
 }
 
 function downloadCSV(dayIdx){
-  const seq=regSequences[dayIdx];if(!seq.length)return;
+  if(!Array.isArray(regSequences)||!regSequences[dayIdx]||!regSequences[dayIdx].length)return;
+  if(!Array.isArray(regDays)||!regDays[dayIdx])return;
+  const seq=regSequences[dayIdx];
   const name=document.getElementById('rg-event').value||'FITNESS_EXPO';
   const date=regDays[dayIdx].date||`giorno${dayIdx+1}`;
   let csv=`PIANO DISTRIBUZIONE PREMI — RANGE ${dayIdx+1}\nSeed: ${makeSeed(dayIdx,name)}\n\nPosizione,Premio,Valore Euro,Emoji\n`;
   csv+=seq.map((p,i)=>`${i+1},"${p.name}",${parseFloat(p.value||0).toFixed(2)},"${p.emoji||'🎁'}"`).join('\n');
   dlFile(csv,`piano_premi_giorno${dayIdx+1}_${date}.csv`,'text/csv');
 }
-function downloadAllCSV(){regSequences.forEach((_,i)=>downloadCSV(i));}
+function downloadAllCSV(){if(Array.isArray(regSequences))regSequences.forEach((_,i)=>downloadCSV(i));}
 
 // ── REGULATION HTML GENERATOR ─────────────────────────────────────────────
 // Shared function used both for download and for auto-publish to Firebase
