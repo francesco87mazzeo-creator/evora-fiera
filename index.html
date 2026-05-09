@@ -808,7 +808,7 @@
       <div class="prh"><span>Nome Premio</span><span style="text-align:center">Qtà totale</span><span>Valore €</span><span></span></div>
       <div id="pcfg"></div>
       <button class="pra" onclick="addPrize()">+ Aggiungi premio</button>
-      <div class="abr"><button class="adbb" onclick="savePrizes()">💾 Salva Premi</button><button class="adbb o" onclick="loadPrizes()">↺ Ricarica</button></div>
+      <div class="abr"><button class="adbb" onclick="savePrizesUI()">💾 Salva Premi</button><button class="adbb o" onclick="loadPrizes()">↺ Ricarica</button></div>
       <div class="adsv" id="psv"></div>
     </div>
     <div id="adm-tab-reg" class="adm-tab-content hidden" style="padding:16px">
@@ -1218,12 +1218,7 @@ function logoutStaff(){stopCamera();showWelcome();}
 function logoutAdmin(){showWelcome();}
 
 // ── REGULATION MODAL ──────────────────────────────────────────────────────
-function openRegModal(){
-  document.getElementById('reg-modal-title').textContent='REGOLAMENTO';
-  buildRegulationModalText();
-  document.getElementById('reg-modal').classList.remove('hidden');
-  document.body.style.overflow='hidden';
-}
+
 function openPrivacyModal(){
   document.getElementById('reg-modal-title').textContent='PRIVACY';
   document.getElementById('reg-modal-content').innerHTML=`
@@ -2149,7 +2144,7 @@ function renderPCfg(){
 function addPrize(){admPrizes.push({id:'p'+Date.now(),name:'',emoji:'🎁',color:'#B22222',desc:'',qty:1,assigned:0,order:admPrizes.length+1,value:0});renderPCfg();}
 function rmPrize(i){admPrizes.splice(i,1);admPrizes.forEach((p,j)=>p.order=j+1);renderPCfg();}
 function emojiFor(n=''){const m={zaino:'🎒',shirt:'👕',tshirt:'👕',sconto:'💸',shaker:'🥤',gadget:'🎁',borraccia:'💧',cappello:'🧢'};const k=Object.keys(m).find(k=>n.toLowerCase().includes(k));return k?m[k]:'🎁';}
-async function savePrizes(){
+async function savePrizesUI(){
   const msg=document.getElementById('psv');msg.textContent='Salvataggio…';
   try{
     const list=admPrizes.map((p,i)=>({...p,order:i+1,emoji:emojiFor(p.name),desc:p.desc||p.name,assigned:p.assigned||0}));
@@ -3231,9 +3226,4 @@ function _regEsc(e){ if(e.key==='Escape') closeRegModal(); }
   </div>
 </div>
 
-
-
-
-
-</body>
 </html>
