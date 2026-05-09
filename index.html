@@ -552,7 +552,7 @@
     .reg-seq-wrap{background:#0a0a0a;border:1px solid #2a2a2a;max-height:220px;overflow-y:auto;border-radius:4px}
     
     /* ── REGULATION FOOTER SECTION ───────────────────────────────────── */
-    #regulation-section{background:#0a0a0a;border-top:1px solid #1a1a1a;padding:40px 20px 80px;margin-top:60px}
+    #regulation-section{background:#0a0a0a;border-top:1px solid #1a1a1a;padding:48px 24px 80px;margin-top:0}
     #regulation-section h1{font-family:var(--fd);font-size:20px;font-weight:800;letter-spacing:2px;text-transform:uppercase;color:var(--w);margin:0 0 8px;text-align:center}
     #regulation-section h2{font-family:var(--fd);font-size:15px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--red);margin:32px 0 12px;padding-top:16px;border-top:1px solid #1a1a1a}
     #regulation-section h2:first-of-type{border-top:none;padding-top:0;margin-top:24px}
@@ -576,12 +576,7 @@
 <div id="glow"></div>
 <canvas id="pcv"></canvas>
 
-<!-- FOOTER -->
-<div id="footer" class="hidden">
-  <button class="ft-link" onclick="document.getElementById('regulation-section').scrollIntoView({behavior:'smooth'})">Regolamento</button>
-</div>
-
-<div id="app" style="display:none;padding-bottom:52px">
+<div id="app" style="display:none">
 
   <!-- TEST MODE BANNER -->
   <div id="test-banner" class="hidden" style="position:fixed;top:0;left:0;right:0;z-index:60;background:#1a3a1a;border-bottom:2px solid #4ecdc4;padding:8px 16px;display:flex;align-items:center;justify-content:center;gap:8px">
@@ -1204,8 +1199,8 @@ function hideAll(){
   });
 }
 function show(id,flex=false){const e=document.getElementById(id);e.classList.remove('hidden');if(flex)e.style.display='flex';}
-function showFooter(){document.getElementById('footer').classList.remove('hidden');}
-function hideFooter(){document.getElementById('footer').classList.add('hidden');}
+function showFooter(){} // footer rimosso in v24
+function hideFooter(){} // footer rimosso in v24
 
 function showWelcome(){
   transitionTo('pg-welcome');stopCamera();
@@ -3084,95 +3079,143 @@ document.addEventListener('keydown', e=>{ if(e.key==='Escape') closeAccessMenu()
   </div>
 </div>
 
-<!-- ══════════════════════════════════════════════════════════════════ -->
-<!-- REGULATION SECTION (sempre visibile, richiede scroll)              -->
-<!-- ══════════════════════════════════════════════════════════════════ -->
-<section id="regulation-section">
-  <h1>REGOLAMENTO – INIZIATIVA PROMOZIONALE EVORΛ FITNESS</h1>
-  <div class="reg-subtitle">Rimini Wellness 2026 | 28–31 maggio 2026</div>
-  
-  <div class="reg-content">
-    <h2>1. Organizzatore</h2>
-    <p>L'iniziativa promozionale è organizzata da <strong>EVORΛ Fitness</strong>.<br>
-    Ragione sociale: Mazzeo Francesco.<br>
-    Contatti ufficiali: <a href="mailto:info@evorafitness.it">info@evorafitness.it</a></p>
+
+<!-- REGULATION ANCHOR: visibile solo quando si scrolla in fondo -->
+<div id="reg-anchor" style="height:1px;background:transparent"></div>
+
+<div id="reg-footer-btn" style="display:none;text-align:center;padding:32px 0 48px;background:#000">
+  <button onclick="openRegModal()" style="background:none;border:none;color:#444;font-family:var(--fd);font-size:11px;letter-spacing:3px;text-transform:uppercase;cursor:pointer;padding:8px 16px;border-bottom:1px solid #2a2a2a">
+    Regolamento
+  </button>
+</div>
+
+<!-- REGULATION MODAL -->
+<div id="reg-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.92);backdrop-filter:blur(8px);z-index:9999;overflow-y:auto;-webkit-overflow-scrolling:touch">
+  <div style="max-width:680px;margin:0 auto;padding:32px 20px 80px">
     
-    <h2>2. Denominazione iniziativa</h2>
-    <p>Iniziativa promozionale EVORΛ Fitness – Rimini Wellness 2026.</p>
-    
-    <h2>3. Periodo di svolgimento</h2>
-    <p>L'iniziativa si svolgerà durante Rimini Wellness 2026 nelle giornate del <strong>28, 29, 30 e 31 maggio 2026</strong>, presso lo stand EVORΛ Fitness.</p>
-    
-    <h2>4. Destinatari</h2>
-    <p>La partecipazione è riservata ai visitatori presenti in fiera di età pari o superiore a <strong>16 anni</strong>.</p>
-    
-    <h2>5. Modalità di partecipazione</h2>
-    <p>Per partecipare è necessario:</p>
-    <ul>
-      <li>scansionare il QR code presente presso lo stand EVORΛ Fitness;</li>
-      <li>compilare il form digitale con dati validi;</li>
-      <li>confermare l'indirizzo email indicato;</li>
-      <li>accedere all'esperienza digitale dedicata.</li>
-    </ul>
-    <p>Ogni partecipante potrà effettuare <strong>una sola partecipazione</strong> per indirizzo email valido.</p>
-    <p>L'organizzatore si riserva il diritto di limitare o annullare partecipazioni duplicate, fraudolente, automatizzate o non conformi allo spirito dell'iniziativa.</p>
-    
-    <h2>6. Sistema di assegnazione degli omaggi</h2>
-    <p>Gli omaggi promozionali vengono assegnati secondo una <strong>sequenza predeterminata</strong> definita dall'organizzatore prima dell'inizio dell'iniziativa.</p>
-    <p>L'assegnazione <strong>non dipende da elementi casuali, estrazioni o meccanismi di sorte</strong>.</p>
-    <p>La sequenza completa di assegnazione degli omaggi viene definita digitalmente dall'organizzatore prima dell'inizio dell'iniziativa e conservata ai fini organizzativi e di verifica interna.</p>
-    
-    <h2>7. Omaggi promozionali</h2>
-    <p>Gli omaggi promozionali previsti per l'iniziativa includono:</p>
-    <ul class="reg-prize-list" id="reg-prize-list"></ul>
-    <p>L'organizzatore si riserva la possibilità di sostituire specifici omaggi con materiali promozionali equivalenti disponibili presso lo stand.</p>
-    
-    <h2>8. Consegna degli omaggi</h2>
-    <p>Gli omaggi vengono consegnati <strong>esclusivamente presso lo stand EVORΛ Fitness</strong> durante il periodo dell'iniziativa.</p>
-    <p>Per il ritiro potrà essere richiesta:</p>
-    <ul>
-      <li>validazione da parte dello staff autorizzato;</li>
-      <li>esibizione della schermata di conferma digitale;</li>
-      <li>verifica della partecipazione registrata.</li>
-    </ul>
-    <p>Gli omaggi non sono convertibili in denaro.</p>
-    
-    <h2>9. Disponibilità degli omaggi</h2>
-    <p>L'iniziativa è valida <strong>fino a disponibilità degli omaggi promozionali</strong> previsti.</p>
-    <p>In caso di esaurimento di specifiche categorie di omaggio, il sistema potrà continuare a distribuire materiali promozionali alternativi, buoni sconto o omaggi equivalenti disponibili presso lo stand.</p>
-    
-    <h2>10. Limitazioni e responsabilità</h2>
-    <p>L'organizzatore non potrà essere ritenuto responsabile per:</p>
-    <ul>
-      <li>problemi tecnici;</li>
-      <li>malfunzionamenti temporanei della piattaforma;</li>
-      <li>indisponibilità della rete internet;</li>
-      <li>incompatibilità del dispositivo utilizzato;</li>
-      <li>errori di compilazione da parte del partecipante;</li>
-      <li>mancata ricezione delle email dovuta a provider, spam o indirizzi errati;</li>
-      <li>interruzioni dovute a cause di forza maggiore.</li>
-    </ul>
-    <p>L'organizzatore si riserva il diritto di sospendere, modificare o interrompere l'iniziativa in qualsiasi momento per esigenze tecniche, organizzative o di sicurezza.</p>
-    
-    <h2>11. Trattamento dei dati personali</h2>
-    <p>La partecipazione all'iniziativa comporta il trattamento dei dati personali forniti dal partecipante.</p>
-    <p>I dati raccolti potranno essere utilizzati per:</p>
-    <ul>
-      <li>gestione dell'iniziativa;</li>
-      <li>verifica delle partecipazioni;</li>
-      <li>invio di comunicazioni informative e promozionali;</li>
-      <li>attività marketing collegate al brand EVORΛ Fitness.</li>
-    </ul>
-    <p>Le informative privacy complete sono disponibili su: <a href="https://evorafitness.it" target="_blank">https://evorafitness.it</a></p>
-    
-    <h2>12. Accettazione del regolamento</h2>
-    <p>La partecipazione all'iniziativa implica l'accettazione del presente regolamento.</p>
-    
-    <h2>13. Informazioni e contatti</h2>
-    <p>Per informazioni relative all'iniziativa:<br>
-    <a href="mailto:info@evorafitness.it">info@evorafitness.it</a></p>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:32px;position:sticky;top:0;background:rgba(0,0,0,.95);padding:16px 0;border-bottom:1px solid #1a1a1a">
+      <div style="font-family:var(--fd);font-size:13px;letter-spacing:3px;color:var(--w);text-transform:uppercase">Regolamento</div>
+      <button onclick="closeRegModal()" style="background:none;border:none;color:#666;font-size:20px;cursor:pointer;padding:4px 8px;line-height:1">✕</button>
+    </div>
+
+    <h1 style="font-family:var(--fd);font-size:18px;font-weight:800;letter-spacing:2px;text-transform:uppercase;color:var(--w);margin:0 0 6px">REGOLAMENTO – INIZIATIVA PROMOZIONALE EVORΛ FITNESS</h1>
+    <p style="font-family:var(--fs);font-size:12px;color:var(--g);margin:0 0 32px">Rimini Wellness 2026 | 28–31 maggio 2026</p>
+
+    <div id="reg-modal-body" style="font-family:var(--fs);font-size:14px;line-height:1.75;color:#ccc">
+
+      <h2 style="font-family:var(--fd);font-size:13px;letter-spacing:2px;text-transform:uppercase;color:var(--red);margin:28px 0 10px;padding-top:24px;border-top:1px solid #1a1a1a">1. Organizzatore</h2>
+      <p>L'iniziativa promozionale è organizzata da <strong style="color:var(--w)">EVORΛ Fitness</strong>.<br>Ragione sociale: Mazzeo Francesco.<br>Contatti ufficiali: <a href="mailto:info@evorafitness.it" style="color:var(--red)">info@evorafitness.it</a></p>
+
+      <h2 style="font-family:var(--fd);font-size:13px;letter-spacing:2px;text-transform:uppercase;color:var(--red);margin:28px 0 10px;border-top:1px solid #1a1a1a;padding-top:24px">2. Denominazione iniziativa</h2>
+      <p>Iniziativa promozionale EVORΛ Fitness – Rimini Wellness 2026.</p>
+
+      <h2 style="font-family:var(--fd);font-size:13px;letter-spacing:2px;text-transform:uppercase;color:var(--red);margin:28px 0 10px;border-top:1px solid #1a1a1a;padding-top:24px">3. Periodo di svolgimento</h2>
+      <p>L'iniziativa si svolgerà durante Rimini Wellness 2026 nelle giornate del <strong style="color:var(--w)">28, 29, 30 e 31 maggio 2026</strong>, presso lo stand EVORΛ Fitness.</p>
+
+      <h2 style="font-family:var(--fd);font-size:13px;letter-spacing:2px;text-transform:uppercase;color:var(--red);margin:28px 0 10px;border-top:1px solid #1a1a1a;padding-top:24px">4. Destinatari</h2>
+      <p>La partecipazione è riservata ai visitatori presenti in fiera di età pari o superiore a <strong style="color:var(--w)">16 anni</strong>.</p>
+
+      <h2 style="font-family:var(--fd);font-size:13px;letter-spacing:2px;text-transform:uppercase;color:var(--red);margin:28px 0 10px;border-top:1px solid #1a1a1a;padding-top:24px">5. Modalità di partecipazione</h2>
+      <p>Per partecipare è necessario:</p>
+      <ul style="padding-left:20px;margin:10px 0">
+        <li style="margin-bottom:6px">scansionare il QR code presente presso lo stand EVORΛ Fitness;</li>
+        <li style="margin-bottom:6px">compilare il form digitale con dati validi;</li>
+        <li style="margin-bottom:6px">confermare l'indirizzo email indicato;</li>
+        <li style="margin-bottom:6px">accedere all'esperienza digitale dedicata.</li>
+      </ul>
+      <p>Ogni partecipante potrà effettuare <strong style="color:var(--w)">una sola partecipazione</strong> per indirizzo email valido.</p>
+      <p>L'organizzatore si riserva il diritto di limitare o annullare partecipazioni duplicate, fraudolente, automatizzate o non conformi allo spirito dell'iniziativa.</p>
+
+      <h2 style="font-family:var(--fd);font-size:13px;letter-spacing:2px;text-transform:uppercase;color:var(--red);margin:28px 0 10px;border-top:1px solid #1a1a1a;padding-top:24px">6. Sistema di assegnazione degli omaggi</h2>
+      <p>Gli omaggi promozionali vengono assegnati secondo una <strong style="color:var(--w)">sequenza predeterminata</strong> definita dall'organizzatore prima dell'inizio dell'iniziativa.</p>
+      <p>L'assegnazione non dipende da elementi casuali, estrazioni o meccanismi di sorte.</p>
+      <p>La sequenza completa viene definita digitalmente prima dell'inizio dell'iniziativa e conservata ai fini organizzativi e di verifica interna.</p>
+
+      <h2 style="font-family:var(--fd);font-size:13px;letter-spacing:2px;text-transform:uppercase;color:var(--red);margin:28px 0 10px;border-top:1px solid #1a1a1a;padding-top:24px">7. Omaggi promozionali</h2>
+      <p>Gli omaggi promozionali previsti per l'iniziativa includono:</p>
+      <ul style="padding-left:20px;margin:10px 0">
+        <li style="margin-bottom:6px">Zaini EVORΛ</li>
+        <li style="margin-bottom:6px">T-shirt EVORΛ</li>
+        <li style="margin-bottom:6px">Accessori allenamento EVORΛ</li>
+        <li style="margin-bottom:6px">Sacchetti EVORΛ</li>
+        <li style="margin-bottom:6px">Buoni sconto</li>
+        <li style="margin-bottom:6px">Altro materiale promozionale</li>
+      </ul>
+      <p>L'organizzatore si riserva la possibilità di sostituire specifici omaggi con materiali promozionali equivalenti disponibili presso lo stand.</p>
+
+      <h2 style="font-family:var(--fd);font-size:13px;letter-spacing:2px;text-transform:uppercase;color:var(--red);margin:28px 0 10px;border-top:1px solid #1a1a1a;padding-top:24px">8. Consegna degli omaggi</h2>
+      <p>Gli omaggi vengono consegnati <strong style="color:var(--w)">esclusivamente presso lo stand EVORΛ Fitness</strong> durante il periodo dell'iniziativa.</p>
+      <p>Per il ritiro potrà essere richiesta:</p>
+      <ul style="padding-left:20px;margin:10px 0">
+        <li style="margin-bottom:6px">validazione da parte dello staff autorizzato;</li>
+        <li style="margin-bottom:6px">esibizione della schermata di conferma digitale;</li>
+        <li style="margin-bottom:6px">verifica della partecipazione registrata.</li>
+      </ul>
+      <p>Gli omaggi non sono convertibili in denaro.</p>
+
+      <h2 style="font-family:var(--fd);font-size:13px;letter-spacing:2px;text-transform:uppercase;color:var(--red);margin:28px 0 10px;border-top:1px solid #1a1a1a;padding-top:24px">9. Disponibilità degli omaggi</h2>
+      <p>L'iniziativa è valida <strong style="color:var(--w)">fino a disponibilità degli omaggi promozionali</strong> previsti.</p>
+      <p>In caso di esaurimento di specifiche categorie di omaggio, il sistema potrà continuare a distribuire materiali promozionali alternativi, buoni sconto o omaggi equivalenti disponibili presso lo stand.</p>
+
+      <h2 style="font-family:var(--fd);font-size:13px;letter-spacing:2px;text-transform:uppercase;color:var(--red);margin:28px 0 10px;border-top:1px solid #1a1a1a;padding-top:24px">10. Limitazioni e responsabilità</h2>
+      <p>L'organizzatore non potrà essere ritenuto responsabile per:</p>
+      <ul style="padding-left:20px;margin:10px 0">
+        <li style="margin-bottom:6px">problemi tecnici;</li>
+        <li style="margin-bottom:6px">malfunzionamenti temporanei della piattaforma;</li>
+        <li style="margin-bottom:6px">indisponibilità della rete internet;</li>
+        <li style="margin-bottom:6px">incompatibilità del dispositivo utilizzato;</li>
+        <li style="margin-bottom:6px">errori di compilazione da parte del partecipante;</li>
+        <li style="margin-bottom:6px">mancata ricezione delle email dovuta a provider, spam o indirizzi errati;</li>
+        <li style="margin-bottom:6px">interruzioni dovute a cause di forza maggiore.</li>
+      </ul>
+      <p>L'organizzatore si riserva il diritto di sospendere, modificare o interrompere l'iniziativa in qualsiasi momento per esigenze tecniche, organizzative o di sicurezza.</p>
+
+      <h2 style="font-family:var(--fd);font-size:13px;letter-spacing:2px;text-transform:uppercase;color:var(--red);margin:28px 0 10px;border-top:1px solid #1a1a1a;padding-top:24px">11. Trattamento dei dati personali</h2>
+      <p>La partecipazione all'iniziativa comporta il trattamento dei dati personali forniti dal partecipante.</p>
+      <p>I dati raccolti potranno essere utilizzati per:</p>
+      <ul style="padding-left:20px;margin:10px 0">
+        <li style="margin-bottom:6px">gestione dell'iniziativa;</li>
+        <li style="margin-bottom:6px">verifica delle partecipazioni;</li>
+        <li style="margin-bottom:6px">invio di comunicazioni informative e promozionali;</li>
+        <li style="margin-bottom:6px">attività marketing collegate al brand EVORΛ Fitness.</li>
+      </ul>
+      <p>Le informative privacy complete sono disponibili su: <a href="https://evorafitness.it" target="_blank" style="color:var(--red)">https://evorafitness.it</a></p>
+
+      <h2 style="font-family:var(--fd);font-size:13px;letter-spacing:2px;text-transform:uppercase;color:var(--red);margin:28px 0 10px;border-top:1px solid #1a1a1a;padding-top:24px">12. Accettazione del regolamento</h2>
+      <p>La partecipazione all'iniziativa implica l'accettazione del presente regolamento.</p>
+
+      <h2 style="font-family:var(--fd);font-size:13px;letter-spacing:2px;text-transform:uppercase;color:var(--red);margin:28px 0 10px;border-top:1px solid #1a1a1a;padding-top:24px">13. Informazioni e contatti</h2>
+      <p>Per informazioni relative all'iniziativa:<br>
+      <a href="mailto:info@evorafitness.it" style="color:var(--red)">info@evorafitness.it</a></p>
+
+    </div>
   </div>
-</section>
+</div>
+
+<script>
+// Mostra il pulsante "Regolamento" solo quando si arriva in fondo
+const _regObs = new IntersectionObserver((entries)=>{
+  entries.forEach(e=>{
+    if(e.isIntersecting){
+      document.getElementById('reg-footer-btn').style.display='block';
+    }
+  });
+},{threshold:0.1});
+const _regAnchor = document.getElementById('reg-anchor');
+if(_regAnchor) _regObs.observe(_regAnchor);
+
+function openRegModal(){
+  document.getElementById('reg-modal').style.display='block';
+  document.body.style.overflow='hidden';
+  document.addEventListener('keydown',_regEsc);
+}
+function closeRegModal(){
+  document.getElementById('reg-modal').style.display='none';
+  document.body.style.overflow='';
+  document.removeEventListener('keydown',_regEsc);
+}
+function _regEsc(e){ if(e.key==='Escape') closeRegModal(); }
+</script>
 
 </body>
 
