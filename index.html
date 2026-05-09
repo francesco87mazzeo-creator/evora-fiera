@@ -1062,7 +1062,11 @@ window.addEventListener('db-ready',async()=>{
         window.DB.getPrizes()
       ]);
       if(reg){
-        if(reg.regDays) regDays=reg.regDays;
+        if(reg.regDays&&Array.isArray(reg.regDays)&&reg.regDays.length>0){
+          regDays=reg.regDays;
+        }else if(!Array.isArray(regDays)){
+          regDays=DEFAULT_DATES.map(date=>({date,dist:[]}));
+        }
         if(reg.regLocked) regLocked=reg.regLocked;
         if(reg.admPrizes) admPrizes=reg.admPrizes;
         if(reg.company) savedRegData.company=reg.company;
@@ -2253,7 +2257,11 @@ async function loadRegulationConfig(){
     document.getElementById('rg-event').value=data.event.name||'';
     document.getElementById('rg-venue').value=data.event.venue||'';
   }
-  if(data.regDays&&data.regDays.length>0) regDays=data.regDays;
+  if(data.regDays&&Array.isArray(data.regDays)&&data.regDays.length>0){
+    regDays=data.regDays;
+  }else if(!Array.isArray(regDays)){
+    regDays=DEFAULT_DATES.map(date=>({date,dist:[]}));
+  }
   if(data.regLocked) regLocked=data.regLocked;
   if(data.admPrizes) admPrizes=typeof data.admPrizes==="string"?JSON.parse(data.admPrizes):data.admPrizes;
   // Load sequences from dedicated documents (authoritative source)
@@ -2291,6 +2299,10 @@ async function loadRegDays(){
 }
 
 function renderRegDays(){
+  if(!Array.isArray(regDays)){
+    console.log('[renderRegDays] regDays non array, init');
+    regDays=DEFAULT_DATES.map(date=>({date,dist:[]}));
+  }
   document.getElementById('reg-days').innerHTML=regDays.map((d,i)=>`
     <div style="background:var(--s2);border:1px solid var(--b);padding:16px;margin-bottom:12px;border-left:3px solid var(--red)">
       <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">
