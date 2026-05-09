@@ -550,6 +550,21 @@
     .reg-seq-table td:first-child{color:#555;font-family:var(--fd);width:32px;font-size:11px}
     .reg-seq-table td:last-child{color:#555;text-align:right;font-size:11px}
     .reg-seq-wrap{background:#0a0a0a;border:1px solid #2a2a2a;max-height:220px;overflow-y:auto;border-radius:4px}
+    
+    /* ── REGULATION FOOTER SECTION ───────────────────────────────────── */
+    #regulation-section{background:#0a0a0a;border-top:1px solid #1a1a1a;padding:40px 20px 80px;margin-top:60px}
+    #regulation-section h1{font-family:var(--fd);font-size:20px;font-weight:800;letter-spacing:2px;text-transform:uppercase;color:var(--w);margin:0 0 8px;text-align:center}
+    #regulation-section h2{font-family:var(--fd);font-size:15px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--red);margin:32px 0 12px;padding-top:16px;border-top:1px solid #1a1a1a}
+    #regulation-section h2:first-of-type{border-top:none;padding-top:0;margin-top:24px}
+    #regulation-section p{font-family:var(--fs);font-size:14px;line-height:1.7;color:#ccc;margin:0 0 12px;max-width:800px;margin-left:auto;margin-right:auto}
+    #regulation-section ul{font-family:var(--fs);font-size:14px;line-height:1.7;color:#ccc;margin:12px 0;padding-left:24px;max-width:800px;margin-left:auto;margin-right:auto}
+    #regulation-section ul li{margin-bottom:8px}
+    #regulation-section a{color:var(--red);text-decoration:none;border-bottom:1px solid transparent;transition:border-color .2s}
+    #regulation-section a:hover{border-bottom-color:var(--red)}
+    #regulation-section .reg-subtitle{font-size:12px;color:var(--g);text-align:center;margin-bottom:32px}
+    #regulation-section .reg-content{max-width:800px;margin:0 auto}
+    #regulation-section .reg-prize-list{list-style:none;padding:0;display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:8px;margin:16px auto;max-width:800px}
+    #regulation-section .reg-prize-list li{background:#111;border:1px solid #222;padding:12px 16px;font-size:14px;color:var(--w);font-family:var(--fs)}
   </style>
 </head>
 <body>
@@ -563,22 +578,7 @@
 
 <!-- FOOTER -->
 <div id="footer" class="hidden">
-  <button class="ft-link" onclick="openRegModal()">Regolamento</button>
-  
-</div>
-
-<!-- REGULATION MODAL -->
-<div id="reg-modal" class="hidden">
-  <div id="reg-modal-backdrop" onclick="closeRegModal()"></div>
-  <div id="reg-modal-box">
-    <div id="reg-modal-header">
-      <div id="reg-modal-title">REGOLAMENTO</div>
-      <button id="reg-modal-close" onclick="closeRegModal()">✕</button>
-    </div>
-    <div id="reg-modal-body">
-      <div id="reg-modal-content"></div>
-    </div>
-  </div>
+  <button class="ft-link" onclick="document.getElementById('regulation-section').scrollIntoView({behavior:'smooth'})">Regolamento</button>
 </div>
 
 <div id="app" style="display:none;padding-bottom:52px">
@@ -1241,7 +1241,7 @@ function openPrivacyModal(){
   document.getElementById('reg-modal').classList.remove('hidden');
   document.body.style.overflow='hidden';
 }
-function closeRegModal(){document.getElementById('reg-modal').classList.add('hidden');document.body.style.overflow='';}
+
 document.addEventListener('keydown',e=>{if(e.key==='Escape')closeRegModal();});
 
 // savedRegData populated at boot from Firebase - used on user-facing pages
@@ -1550,6 +1550,31 @@ function showPrizesEnded(){
       </div>
       <div style="font-family:var(--fd);font-size:10px;letter-spacing:3px;color:#444;text-transform:uppercase">© Evora Fitness</div>
     </div>`;
+}
+
+// ── POPULATE REGULATION PRIZES (dinamico da sequenze) ─────────────────────
+async function populateRegulationPrizes(){
+  try{
+    // Carica main + emergency sequences
+    const [mainSnap, extSnap] = await Promise.all([
+      window.DB.getDoc_("sequences","main"),
+      window.DB.getDoc_("sequences","emergency")
+    ]);
+    const allSeq = [...((mainSnap&&mainSnap.prizes)||[]), ...((extSnap&&extSnap.prizes)||[])];
+    
+    // Estrai nomi unici (rimuovi duplicati)
+    const uniqueNames = [...new Set(allSeq.map(p=>p.name||'Omaggio promozionale'))];
+    
+    // Popola la lista
+    const el = document.getElementById('reg-prize-list');
+    if(el && uniqueNames.length > 0){
+      el.innerHTML = uniqueNames.map(name=>`<li>${name}</li>`).join('');
+    } else if(el){
+      el.innerHTML = '<li>Omaggi promozionali EVORΛ Fitness</li>';
+    }
+  }catch(e){
+    console.log('[Regulation] Errore caricamento premi:',e);
+  }
 }
 
 // ── ALREADY PLAYED SCREEN ─────────────────────────────────────────────────
@@ -3058,6 +3083,96 @@ document.addEventListener('keydown', e=>{ if(e.key==='Escape') closeAccessMenu()
     <button onclick="closeAccessMenu()" style="width:100%;padding:10px;background:transparent;border:none;color:#555;font-family:'Barlow Condensed',sans-serif;font-size:11px;letter-spacing:3px;text-transform:uppercase;cursor:pointer">Annulla</button>
   </div>
 </div>
+
+<!-- ══════════════════════════════════════════════════════════════════ -->
+<!-- REGULATION SECTION (sempre visibile, richiede scroll)              -->
+<!-- ══════════════════════════════════════════════════════════════════ -->
+<section id="regulation-section">
+  <h1>REGOLAMENTO – INIZIATIVA PROMOZIONALE EVORΛ FITNESS</h1>
+  <div class="reg-subtitle">Rimini Wellness 2026 | 28–31 maggio 2026</div>
+  
+  <div class="reg-content">
+    <h2>1. Organizzatore</h2>
+    <p>L'iniziativa promozionale è organizzata da <strong>EVORΛ Fitness</strong>.<br>
+    Ragione sociale: Mazzeo Francesco.<br>
+    Contatti ufficiali: <a href="mailto:info@evorafitness.it">info@evorafitness.it</a></p>
+    
+    <h2>2. Denominazione iniziativa</h2>
+    <p>Iniziativa promozionale EVORΛ Fitness – Rimini Wellness 2026.</p>
+    
+    <h2>3. Periodo di svolgimento</h2>
+    <p>L'iniziativa si svolgerà durante Rimini Wellness 2026 nelle giornate del <strong>28, 29, 30 e 31 maggio 2026</strong>, presso lo stand EVORΛ Fitness.</p>
+    
+    <h2>4. Destinatari</h2>
+    <p>La partecipazione è riservata ai visitatori presenti in fiera di età pari o superiore a <strong>16 anni</strong>.</p>
+    
+    <h2>5. Modalità di partecipazione</h2>
+    <p>Per partecipare è necessario:</p>
+    <ul>
+      <li>scansionare il QR code presente presso lo stand EVORΛ Fitness;</li>
+      <li>compilare il form digitale con dati validi;</li>
+      <li>confermare l'indirizzo email indicato;</li>
+      <li>accedere all'esperienza digitale dedicata.</li>
+    </ul>
+    <p>Ogni partecipante potrà effettuare <strong>una sola partecipazione</strong> per indirizzo email valido.</p>
+    <p>L'organizzatore si riserva il diritto di limitare o annullare partecipazioni duplicate, fraudolente, automatizzate o non conformi allo spirito dell'iniziativa.</p>
+    
+    <h2>6. Sistema di assegnazione degli omaggi</h2>
+    <p>Gli omaggi promozionali vengono assegnati secondo una <strong>sequenza predeterminata</strong> definita dall'organizzatore prima dell'inizio dell'iniziativa.</p>
+    <p>L'assegnazione <strong>non dipende da elementi casuali, estrazioni o meccanismi di sorte</strong>.</p>
+    <p>La sequenza completa di assegnazione degli omaggi viene definita digitalmente dall'organizzatore prima dell'inizio dell'iniziativa e conservata ai fini organizzativi e di verifica interna.</p>
+    
+    <h2>7. Omaggi promozionali</h2>
+    <p>Gli omaggi promozionali previsti per l'iniziativa includono:</p>
+    <ul class="reg-prize-list" id="reg-prize-list"></ul>
+    <p>L'organizzatore si riserva la possibilità di sostituire specifici omaggi con materiali promozionali equivalenti disponibili presso lo stand.</p>
+    
+    <h2>8. Consegna degli omaggi</h2>
+    <p>Gli omaggi vengono consegnati <strong>esclusivamente presso lo stand EVORΛ Fitness</strong> durante il periodo dell'iniziativa.</p>
+    <p>Per il ritiro potrà essere richiesta:</p>
+    <ul>
+      <li>validazione da parte dello staff autorizzato;</li>
+      <li>esibizione della schermata di conferma digitale;</li>
+      <li>verifica della partecipazione registrata.</li>
+    </ul>
+    <p>Gli omaggi non sono convertibili in denaro.</p>
+    
+    <h2>9. Disponibilità degli omaggi</h2>
+    <p>L'iniziativa è valida <strong>fino a disponibilità degli omaggi promozionali</strong> previsti.</p>
+    <p>In caso di esaurimento di specifiche categorie di omaggio, il sistema potrà continuare a distribuire materiali promozionali alternativi, buoni sconto o omaggi equivalenti disponibili presso lo stand.</p>
+    
+    <h2>10. Limitazioni e responsabilità</h2>
+    <p>L'organizzatore non potrà essere ritenuto responsabile per:</p>
+    <ul>
+      <li>problemi tecnici;</li>
+      <li>malfunzionamenti temporanei della piattaforma;</li>
+      <li>indisponibilità della rete internet;</li>
+      <li>incompatibilità del dispositivo utilizzato;</li>
+      <li>errori di compilazione da parte del partecipante;</li>
+      <li>mancata ricezione delle email dovuta a provider, spam o indirizzi errati;</li>
+      <li>interruzioni dovute a cause di forza maggiore.</li>
+    </ul>
+    <p>L'organizzatore si riserva il diritto di sospendere, modificare o interrompere l'iniziativa in qualsiasi momento per esigenze tecniche, organizzative o di sicurezza.</p>
+    
+    <h2>11. Trattamento dei dati personali</h2>
+    <p>La partecipazione all'iniziativa comporta il trattamento dei dati personali forniti dal partecipante.</p>
+    <p>I dati raccolti potranno essere utilizzati per:</p>
+    <ul>
+      <li>gestione dell'iniziativa;</li>
+      <li>verifica delle partecipazioni;</li>
+      <li>invio di comunicazioni informative e promozionali;</li>
+      <li>attività marketing collegate al brand EVORΛ Fitness.</li>
+    </ul>
+    <p>Le informative privacy complete sono disponibili su: <a href="https://evorafitness.it" target="_blank">https://evorafitness.it</a></p>
+    
+    <h2>12. Accettazione del regolamento</h2>
+    <p>La partecipazione all'iniziativa implica l'accettazione del presente regolamento.</p>
+    
+    <h2>13. Informazioni e contatti</h2>
+    <p>Per informazioni relative all'iniziativa:<br>
+    <a href="mailto:info@evorafitness.it">info@evorafitness.it</a></p>
+  </div>
+</section>
 
 </body>
 
