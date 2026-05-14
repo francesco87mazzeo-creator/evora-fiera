@@ -48,20 +48,22 @@
     
     // Aspetta il DOM
     function renderPage(){
-      document.documentElement.innerHTML = ''
-        + '<head>'
-        + '<meta charset="UTF-8"/>'
-        + '<meta name="viewport" content="width=device-width,initial-scale=1.0,user-scalable=no"/>'
-        + '<title>EVORΛ Fitness</title>'
-        + '<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500&family=Barlow+Condensed:wght@700;800&display=swap" rel="stylesheet"/>'
-        + '<style>'
+      // Imposta stili base sull'html e nascondi il body originale
+      document.documentElement.style.background = '#0a0a0a';
+      document.documentElement.style.height = '100%';
+      
+      // CSS injection
+      var css = document.createElement('style');
+      css.textContent = ''
         + '@keyframes spin{to{transform:rotate(360deg)}}'
         + '@keyframes fadeUp{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}'
         + '@keyframes pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.04)}}'
-        + 'html,body{margin:0;padding:0;background:#0a0a0a;font-family:Barlow,sans-serif;overflow-x:hidden;min-height:100vh}'
+        + 'html,body{margin:0;padding:0;background:#0a0a0a !important;font-family:Barlow,sans-serif;min-height:100vh}'
+        + 'body > *{display:none !important}' // nasconde tutto del body originale
+        + '#ig-gate{display:block !important;position:fixed;top:0;left:0;right:0;bottom:0;background:#0a0a0a;z-index:999999;overflow-y:auto}'
         + '.ig-wrap{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px 24px;text-align:center;color:#f0ede8;box-sizing:border-box}'
         + '.ig-eyebrow{font-family:Barlow Condensed,sans-serif;font-size:12px;letter-spacing:5px;color:#B22222;text-transform:uppercase;margin-bottom:24px;font-weight:700;animation:fadeUp .6s ease-out}'
-        + '.ig-title{font-family:Barlow Condensed,sans-serif;font-size:54px;font-weight:800;letter-spacing:1px;text-transform:uppercase;line-height:.95;margin-bottom:18px;animation:fadeUp .7s ease-out}'
+        + '.ig-title{font-family:Barlow Condensed,sans-serif;font-size:54px;font-weight:800;letter-spacing:1px;text-transform:uppercase;line-height:.95;margin-bottom:18px;animation:fadeUp .7s ease-out;color:#f0ede8}'
         + '.ig-title span{display:block;color:#B22222}'
         + '.ig-divider{width:60px;height:3px;background:#B22222;margin:24px auto 28px;animation:fadeUp .8s ease-out}'
         + '.ig-sub{font-size:16px;line-height:1.5;color:#bbb;max-width:380px;margin-bottom:48px;animation:fadeUp .9s ease-out}'
@@ -73,10 +75,13 @@
         + '.ig-loader-txt{font-size:13px;color:#888;letter-spacing:1px}'
         + '.ig-ready-emoji{font-size:54px;margin-bottom:16px;animation:pulse 1.5s ease-in-out infinite}'
         + '.ig-ready-title{font-family:Barlow Condensed,sans-serif;font-size:32px;font-weight:800;letter-spacing:1px;text-transform:uppercase;margin-bottom:32px;color:#fff}'
-        + '@media (max-width:480px){.ig-title{font-size:42px}.ig-eyebrow{font-size:11px;letter-spacing:4px}.ig-btn{font-size:15px;padding:18px 28px;letter-spacing:2px;min-width:240px}}'
-        + '</style>'
-        + '</head>'
-        + '<body>'
+        + '@media (max-width:480px){.ig-title{font-size:42px}.ig-eyebrow{font-size:11px;letter-spacing:4px}.ig-btn{font-size:15px;padding:18px 28px;letter-spacing:2px;min-width:240px}}';
+      document.head.appendChild(css);
+      
+      // Crea container per la pagina Instagram
+      var gate = document.createElement('div');
+      gate.id = 'ig-gate';
+      gate.innerHTML = ''
         + '<div class="ig-wrap">'
         + '<div class="ig-eyebrow">EVORΛ FITNESS — RIMINI WELLNESS</div>'
         + '<h1 class="ig-title">VINCI PREMI<span>EVORΛ</span></h1>'
@@ -101,10 +106,10 @@
         + '<div class="ig-ready-title">Pronto a giocare?</div>'
         + '<a href="' + SHOPIFY_FORM + '" class="ig-btn">GIOCA ORA →</a>'
         + '</div>'
-        + '</div>'
-        + '</body>';
+        + '</div>';
+      document.body.appendChild(gate);
       
-      // Aggiungo event listener al pulsante (innerHTML script non si eseguono)
+      // Event listener pulsante
       var btn = document.getElementById('igBtn');
       if(btn){
         btn.addEventListener('click', function(){
@@ -1354,8 +1359,4 @@ function todayStr(){
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 }
 
-// Check if today is one of the configured fair dates
-function isValidFairDay(){
-  const today=todayStr();
-  const validDates=regDays.map(d=>d.date).filter(Boolean);
-  // No dates configured yet → allow (admin hasn't set up, o
+// Check if toda
