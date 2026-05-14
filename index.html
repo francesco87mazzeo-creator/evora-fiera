@@ -1590,11 +1590,31 @@ async function refreshRanking(){
       throw new Error('Firebase DB non ancora pronto');
     }
     
-    // Leaderboard ha struttura diretta {ref: count}, non {value: ...}
-    const lb = await window.DB.getDoc_('config','leaderboard');
-    console.log('[Ranking] Raw leaderboard data:', lb);
-    const data = lb || {};
-    console.log('[Ranking] Entries:', Object.entries(data));
+    // Legge leaderboard (punteggi) e lista QR (tutti gli influencer)
+    const [lb, sources] = await Promise.all([
+      window.DB.getDoc_('config','leaderboard'),
+      window.DB.getConfig('qr_sources')
+    ]);
+    
+    console.log('[Ranking] Leaderboard:', lb);
+    console.log('[Ranking] QR Sources:', sources);
+    
+    const scores = lb || {};
+    
+    // Costruisce oggetto con TUTTI gli influencer (anche chi ha 0 giocate)
+    const data = {};
+    if(sources && sources.length){
+      sources.forEach(src => {
+        const key = src.id || src.name || '';
+        if(key) data[key] = scores[key] || 0;
+      });
+    }
+    // Aggiunge anche chi ha giocate ma non è nella lista QR (fallback)
+    Object.entries(scores).forEach(([k,v]) => {
+      if(!(k in data) && k !== 'savedAt') data[k] = v;
+    });
+    
+    console.log('[Ranking] Final data:', data);
     
     // Salva in cache
     const nextUpdate = setRankingCache(data);
