@@ -129,30 +129,8 @@
         });
       }
       
-      // Event listener LOGO — 5 click veloci per accesso admin/staff
-      var logo = document.getElementById('igLogo');
-      if(logo){
-        var tapCount = 0;
-        var tapTimer = null;
-        var handleTap = function(e){
-          if(e) e.preventDefault();
-          tapCount++;
-          console.log('[Logo Tap]', tapCount, '/5');
-          clearTimeout(tapTimer);
-          if(tapCount >= 5){
-            tapCount = 0;
-            showAccessMenu();
-          } else {
-            tapTimer = setTimeout(function(){ tapCount = 0; }, 2000);
-          }
-        };
-        // Sia click (desktop) che touchend (mobile) per massima compatibilità
-        logo.addEventListener('click', handleTap);
-        logo.addEventListener('touchend', function(e){ e.preventDefault(); handleTap(e); });
-      }
-      
-      // Menu accesso visivo (sostituisce prompt nativo che su mobile a volte si comporta male)
-      window.showAccessMenu = function(){
+      // Menu accesso visivo (DEFINITO PRIMA del listener!)
+      function showAccessMenu(){
         var menu = document.createElement('div');
         menu.id = 'access-overlay';
         menu.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.92);backdrop-filter:blur(10px);z-index:9999999;display:flex;align-items:center;justify-content:center;padding:24px';
@@ -176,7 +154,29 @@
         document.getElementById('cancelAccessBtn').addEventListener('click', function(){
           menu.remove();
         });
-      };
+      }
+      
+      // Event listener LOGO — 5 click veloci per accesso admin/staff
+      var logo = document.getElementById('igLogo');
+      if(logo){
+        var tapCount = 0;
+        var tapTimer = null;
+        var handleTap = function(e){
+          if(e) e.preventDefault();
+          tapCount++;
+          console.log('[Logo Tap]', tapCount, '/5');
+          clearTimeout(tapTimer);
+          if(tapCount >= 5){
+            tapCount = 0;
+            console.log('[Logo Tap] OPENING ACCESS MENU');
+            showAccessMenu();
+          } else {
+            tapTimer = setTimeout(function(){ tapCount = 0; }, 2000);
+          }
+        };
+        logo.addEventListener('click', handleTap);
+        logo.addEventListener('touchend', function(e){ e.preventDefault(); handleTap(e); });
+      }
     }
     
     // Esegui quando il DOM è pronto
