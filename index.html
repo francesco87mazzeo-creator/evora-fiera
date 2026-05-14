@@ -1533,11 +1533,13 @@ function showRanking(){
     renderRankingList(cached.data);
     startRankingCountdown(cached.nextUpdate);
   } else {
-    // Prima apertura o cache scaduta — aggiorna subito
-    document.getElementById('ranking-list').innerHTML = '<div style="color:#666;text-align:center;padding:40px">Caricamento...</div>';
+    // Prima apertura — mostra pulsante attivo, aspetta click utente
+    document.getElementById('ranking-list').innerHTML = '<div style="color:#666;text-align:center;padding:40px;font-size:14px">Clicca AGGIORNA per vedere la classifica</div>';
     document.getElementById('ranking-status').textContent = '';
     document.getElementById('ranking-countdown').textContent = '';
-    refreshRanking();
+    // Pulsante abilitato subito
+    const btn = document.getElementById('ranking-refresh-btn');
+    if(btn){ btn.disabled = false; btn.textContent = '🔄 AGGIORNA'; btn.style.opacity = '1'; }
   }
 }
 
@@ -1580,9 +1582,19 @@ async function refreshRanking(){
   status.textContent = '';
   
   try{
+    console.log('[Ranking] Fetching leaderboard...');
+    console.log('[Ranking] window.DB available:', !!window.DB);
+    console.log('[Ranking] window.DB.getDoc_ available:', !!(window.DB && window.DB.getDoc_));
+    
+    if(!window.DB || !window.DB.getDoc_){
+      throw new Error('Firebase DB non ancora pronto');
+    }
+    
     // Leaderboard ha struttura diretta {ref: count}, non {value: ...}
     const lb = await window.DB.getDoc_('config','leaderboard');
+    console.log('[Ranking] Raw leaderboard data:', lb);
     const data = lb || {};
+    console.log('[Ranking] Entries:', Object.entries(data));
     
     // Salva in cache
     const nextUpdate = setRankingCache(data);
@@ -1595,8 +1607,8 @@ async function refreshRanking(){
     status.textContent = 'Aggiornato alle ' + now.getHours().toString().padStart(2,'0') + ':' + now.getMinutes().toString().padStart(2,'0');
     
   }catch(e){
-    console.error('[Ranking]', e);
-    status.textContent = 'Errore di connessione';
+    console.error('[Ranking] Error:', e);
+    status.textContent = 'Errore: ' + e.message;
     btn.disabled = false;
     btn.textContent = '🔄 AGGIORNA';
   }
