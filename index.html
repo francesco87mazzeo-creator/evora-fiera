@@ -19,6 +19,13 @@
     var uEmail = params.get('email') || '';
     var isQRScanMode = uRef && !uCustomerId && !uEmail;
     
+    // Bypass: se la URL ha #admin o #staff, NON attivare gate Instagram
+    var hash = window.location.hash || '';
+    if(hash.indexOf('admin') !== -1 || hash.indexOf('staff') !== -1){
+      console.log('[QR Gate] Bypass per admin/staff');
+      return;
+    }
+    
     if(!isQRScanMode) return; // continua col gioco normale
     
     console.log('[QR Gate] Instagram gate attivo - Ref:', uRef);
@@ -28,6 +35,7 @@
     
     var INSTAGRAM_URL = 'https://www.instagram.com/evora_fitness?igsh=MWdyaWd5eDk3b3FhcQ==';
     var SHOPIFY_FORM = 'https://evorafitness.it/pages/fiera-rimini-wellness-2026';
+    var LOGO_DATA = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA1OTUuMjggMjgyLjYyIj48cGF0aCBmaWxsPSIjZjBlZGU4IiBkPSJNMzEuNDgsOTQuMjFoNzEuMDV2MTguNDRINTIuMDd2MTkuMTFoNDQuNHYxOC40M0g1Mi4wN1YxNzBIMTAzLjJ2MTguNDRIMzEuNDhaIi8+PHBhdGggZmlsbD0iI2YwZWRlOCIgZD0iTTEyNi4yNiw5My44OGgyMi44N2wyNC42Myw2Ni4zNCwyNC42My02Ni4zNGgyMi4zM2wtMzguMDgsOTQuODdoLTE4LjNaIi8+PHBhdGggZmlsbD0iI2YwZWRlOCIgZD0iTTI0MCwxNDEuNTh2LS4yN2MwLTI2Ljc4LDIxLjEzLTQ4LjcxLDUwLjItNDguNzFzNDkuOTIsMjEuNjYsNDkuOTIsNDguNDR2LjI3QzM0MC4xNiwxNjguMDksMzE5LDE5MCwyOTAsMTkwUzI0MCwxNjguMzYsMjQwLDE0MS41OFptNzguNDYsMHYtLjI3YzAtMTYuMTUtMTEuODUtMjkuNi0yOC41My0yOS42UzI2MS43MSwxMjQuOSwyNjEuNzEsMTQxdi4yN2MwLDE2LjE1LDExLjg0LDI5LjYxLDI4LjUzLDI5LjYxUzMxOC41LDE1Ny43MywzMTguNSwxNDEuNThaIi8+PHBhdGggZmlsbD0iI2YwZWRlOCIgZD0iTTM2Nyw5NC4yMUg0MTBjMTIsMCwyMS4xMiwzLjIzLDI3LjQ1LDkuNTYsNS4zOCw1LjM4LDguMDcsMTIuNTEsOC4wNywyMS41M3YuMjdjMCwxNS4yLTguMjEsMjQuNzYtMjAuMTksMjkuMmwyMywzMy42NEg0MjQuMTRMNDA0LDE1OC4yN0gzODcuNjh2MzAuMTRIMzY3Wk00MDguNjcsMTQwYzEwLjIzLDAsMTUuODgtNS4yNSwxNS44OC0xMy4zM3YtLjI2YzAtOS02LjA2LTEzLjQ2LTE2LjI4LTEzLjQ2SDM4Ny42OFYxNDBaIi8+PHBhdGggZmlsbD0iI2YwZWRlOCIgZD0iTTUxMy44NywxMTguMWwtMjguOCw3MC42NUg0NjRsNDAuMzctOTQuODdoMTkuMWw0MC4zNyw5NC44N0g1NDIuMTNMNTEzLjg3LDExOC4xIi8+PC9zdmc+';
     
     // Salva scan in background
     var FIREBASE_PROJECT = 'evora-fiera';
@@ -83,11 +91,10 @@
       gate.id = 'ig-gate';
       gate.innerHTML = ''
         + '<div class="ig-wrap">'
-        + '<div class="ig-eyebrow">EVORΛ FITNESS — RIMINI WELLNESS</div>'
+        + '<img id="igLogo" src="' + LOGO_DATA + '" alt="EVORA" style="width:140px;max-width:50vw;height:auto;margin-bottom:32px;cursor:pointer;animation:fadeUp .5s ease-out"/>'
         + '<h1 class="ig-title">VINCI PREMI<span>EVORΛ</span></h1>'
         + '<div class="ig-divider"></div>'
         + '<div class="ig-step1" id="igStep1">'
-        + '<p class="ig-sub">Seguici su Instagram per partecipare all\'iniziativa promozionale</p>'
         + '<a href="' + INSTAGRAM_URL + '" target="_blank" class="ig-btn" id="igBtn">'
         + '<svg width="24" height="24" viewBox="0 0 24 24" fill="none">'
         + '<rect x="2" y="2" width="20" height="20" rx="5" stroke="white" stroke-width="2"/>'
@@ -119,6 +126,32 @@
             document.getElementById('igStep1').style.display = 'none';
             document.getElementById('igStep2').style.display = 'block';
           }, 1500);
+        });
+      }
+      
+      // Event listener LOGO — 5 click veloci per accesso admin/staff
+      var logo = document.getElementById('igLogo');
+      if(logo){
+        var tapCount = 0;
+        var tapTimer = null;
+        logo.addEventListener('click', function(e){
+          e.preventDefault();
+          tapCount++;
+          clearTimeout(tapTimer);
+          if(tapCount >= 5){
+            tapCount = 0;
+            // Mostra menu accesso staff/admin con prompt nativo
+            var choice = prompt('Accesso rapido:\n1 = Staff\n2 = Admin\n(annulla per chiudere)');
+            if(choice === '1'){
+              // Rimuovi ?ref dall'URL e vai a #staff
+              window.location.href = window.location.pathname + '#staff';
+            } else if(choice === '2'){
+              window.location.href = window.location.pathname + '#admin';
+            }
+          } else {
+            // Reset counter dopo 2 secondi senza click
+            tapTimer = setTimeout(function(){ tapCount = 0; }, 2000);
+          }
         });
       }
     }
@@ -1304,59 +1337,4 @@ function showWelcome(){
   show('pg-welcome');showFooter();
 }
 function goHome(){showWelcome();}
-function showLoginStaff(){hideAll();const e=document.getElementById('pg-login-staff');e.classList.remove('hidden');e.style.display='flex';document.getElementById('spwd').value='';document.getElementById('serr').textContent='';showFooter();}
-function showLoginAdmin(){hideAll();const e=document.getElementById('pg-login-admin');e.classList.remove('hidden');e.style.display='flex';document.getElementById('apwd').value='';document.getElementById('aerr').textContent='';showFooter();}
-function chkStaff(){if(document.getElementById('spwd').value===PWD.staff)showStaff();else document.getElementById('serr').textContent='Password errata';}
-function chkAdmin(){if(document.getElementById('apwd').value===PWD.admin)showAdminPage();else document.getElementById('aerr').textContent='Password errata';}
-function logoutStaff(){stopCamera();showWelcome();}
-function logoutAdmin(){showWelcome();}
-
-// ── REGULATION MODAL ──────────────────────────────────────────────────────
-
-function openPrivacyModal(){
-  // Reindirizza al regolamento completo che è già nel popup
-  openRegModal();
-}
-
-document.addEventListener('keydown',e=>{if(e.key==='Escape')closeRegModal();});
-
-// savedRegData populated at boot from Firebase - used on user-facing pages
-let savedRegData={company:{name:'Evora',city:'',vat:''},event:{name:'Evora Fiera 2026',venue:'evento fieristico'}};
-
-// Format YYYY-MM-DD → "28 maggio 2026"
-function fmtDate(d){
-  if(!d)return'';
-  const months=['','gennaio','febbraio','marzo','aprile','maggio','giugno','luglio','agosto','settembre','ottobre','novembre','dicembre'];
-  const p=d.split('-');
-  return`${parseInt(p[2])} ${months[parseInt(p[1])]} ${p[0]}`;
-}
-
-// Build regulation modal content with full sequences, day tabs
-function buildRegulationModalText(){ /* rimossa in v24 - regolamento è popup statico */ }
-
-function toggleSeqDetail(i){
-  const panel=document.getElementById(`seq-detail-${i}`);
-  const btn=document.getElementById(`seq-toggle-${i}`);
-  if(!panel) return;
-  const isHidden=panel.classList.contains('hidden');
-  panel.classList.toggle('hidden',!isHidden);
-  if(btn) btn.textContent=(isHidden?'▼':'▶')+btn.textContent.slice(1);
-}
-
-function switchRegDay(idx,btn){
-  document.querySelectorAll('.reg-day-tab').forEach(b=>b.classList.remove('active'));
-  document.querySelectorAll('.reg-day-seq').forEach(p=>p.classList.remove('active'));
-  btn.classList.add('active');
-  const panel=document.getElementById(`reg-seq-panel-${idx}`);
-  if(panel) panel.classList.add('active');
-}
-
-// ── GAME ──────────────────────────────────────────────────────────────────
-
-// Returns today's date as YYYY-MM-DD in local time
-function todayStr(){
-  const d=new Date();
-  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-}
-
-// Check if toda
+function showLoginStaff(){hideAll();const e=document.getElementById('pg-login-staff');e.classList.remove('hidden');e.style.display='flex';document.getElementById('spwd').value='';document.getElementById('serr').textContent=
