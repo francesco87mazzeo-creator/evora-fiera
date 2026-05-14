@@ -69,7 +69,7 @@
         + 'html,body{margin:0;padding:0;background:#0a0a0a !important;font-family:Barlow,sans-serif;min-height:100vh}'
         + 'body > *{display:none !important}' // nasconde tutto del body originale
         + '#ig-gate{display:block !important;position:fixed;top:0;left:0;right:0;bottom:0;background:#0a0a0a;z-index:999999;overflow-y:auto}'
-        + '.ig-wrap{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px 24px;text-align:center;color:#f0ede8;box-sizing:border-box}'
+        + '.ig-wrap{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;padding:20px 24px 40px;text-align:center;color:#f0ede8;box-sizing:border-box}'
         + '.ig-eyebrow{font-family:Barlow Condensed,sans-serif;font-size:12px;letter-spacing:5px;color:#B22222;text-transform:uppercase;margin-bottom:24px;font-weight:700;animation:fadeUp .6s ease-out}'
         + '.ig-title{font-family:Barlow Condensed,sans-serif;font-size:54px;font-weight:800;letter-spacing:1px;text-transform:uppercase;line-height:.95;margin-bottom:18px;animation:fadeUp .7s ease-out;color:#f0ede8}'
         + '.ig-title span{display:block;color:#B22222}'
@@ -91,7 +91,7 @@
       gate.id = 'ig-gate';
       gate.innerHTML = ''
         + '<div class="ig-wrap">'
-        + '<img id="igLogo" src="' + LOGO_DATA + '" alt="EVORA" style="width:140px;max-width:50vw;height:auto;margin-bottom:32px;cursor:pointer;animation:fadeUp .5s ease-out"/>'
+        + '<img id="igLogo" src="' + LOGO_DATA + '" alt="EVORA" style="width:120px;max-width:40vw;height:auto;margin-bottom:80px;margin-top:20px;cursor:pointer;pointer-events:auto;-webkit-tap-highlight-color:rgba(178,34,34,.3);animation:fadeUp .5s ease-out;position:relative;z-index:10"/>'
         + '<h1 class="ig-title">VINCI PREMI<span>EVORΛ</span></h1>'
         + '<div class="ig-divider"></div>'
         + '<div class="ig-step1" id="igStep1">'
@@ -134,9 +134,10 @@
       if(logo){
         var tapCount = 0;
         var tapTimer = null;
-        logo.addEventListener('click', function(e){
-          e.preventDefault();
+        var handleTap = function(e){
+          if(e) e.preventDefault();
           tapCount++;
+          console.log('[Logo Tap]', tapCount, '/5');
           clearTimeout(tapTimer);
           if(tapCount >= 5){
             tapCount = 0;
@@ -144,7 +145,10 @@
           } else {
             tapTimer = setTimeout(function(){ tapCount = 0; }, 2000);
           }
-        });
+        };
+        // Sia click (desktop) che touchend (mobile) per massima compatibilità
+        logo.addEventListener('click', handleTap);
+        logo.addEventListener('touchend', function(e){ e.preventDefault(); handleTap(e); });
       }
       
       // Menu accesso visivo (sostituisce prompt nativo che su mobile a volte si comporta male)
