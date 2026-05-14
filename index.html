@@ -1665,14 +1665,13 @@ function showMyQRView(src){
   const url=QR_BASE_URL+'?ref='+encodeURIComponent(src.id);
   
   document.getElementById('myqr-name').textContent=src.name||src.id;
-  document.getElementById('myqr-url').textContent=url;
   
   // Genera QR image
   const qrContainer=document.getElementById('myqr-image');
   qrContainer.innerHTML='';
   try{
-    // Calcola dimensione QR in base allo schermo
-    const qrSize = Math.min(window.innerWidth - 96, 400);
+    // Dimensione = quasi tutta la larghezza schermo
+    const qrSize = Math.min(window.innerWidth - 48, 480);
     new QRCode(qrContainer,{
       text:url,
       width:qrSize,
@@ -1681,29 +1680,17 @@ function showMyQRView(src){
       colorLight:'#ffffff',
       correctLevel:QRCode.CorrectLevel.M
     });
+    // Forza il canvas/img generato da QRCode a riempire il container
+    setTimeout(()=>{
+      const img = qrContainer.querySelector('img');
+      const canvas = qrContainer.querySelector('canvas');
+      if(img){ img.style.width='100%'; img.style.height='auto'; img.style.display='block'; }
+      if(canvas){ canvas.style.width='100%'; canvas.style.height='auto'; canvas.style.display='block'; }
+    }, 50);
   }catch(err){
     console.error('[QR]',err);
-    qrContainer.innerHTML='<div style="color:#f66;padding:20px">Errore generazione QR</div>';
+    qrContainer.innerHTML='<div style="color:#f66;padding:20px;text-align:center">Errore generazione QR</div>';
   }
-  
-  // Setup pulsante copia
-  const copyBtn=document.getElementById('myqr-copy');
-  copyBtn.onclick=function(){
-    navigator.clipboard.writeText(url).then(()=>{
-      copyBtn.textContent='✓ Copiato!';
-      setTimeout(()=>{copyBtn.textContent='📋 Copia link';},2000);
-    }).catch(()=>{
-      // Fallback per browser vecchi
-      const ta=document.createElement('textarea');
-      ta.value=url;
-      document.body.appendChild(ta);
-      ta.select();
-      document.execCommand('copy');
-      document.body.removeChild(ta);
-      copyBtn.textContent='✓ Copiato!';
-      setTimeout(()=>{copyBtn.textContent='📋 Copia link';},2000);
-    });
-  };
   
   showFooter();
 }
