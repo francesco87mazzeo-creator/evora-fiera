@@ -264,7 +264,7 @@
       
       async function savePointers(asgn){
         if(testMode) return; // niente pointer in test mode
-        if(customerId&&customerId!==realPrimaryKey) try{await setDoc(doc(db,"assignments",customerId),{_ref:realPrimaryKey,shopifyCustomerId:customerId,assignedAt:asgn.assignedAt});}catch(e){}
+        // customerId pointer rimosso (ridondante con email)
         if(emailKey&&emailKey!==realPrimaryKey) try{await setDoc(doc(db,"assignments",emailKey),{_ref:realPrimaryKey,userEmail:email,assignedAt:asgn.assignedAt});}catch(e){}
         if(token&&token!==realPrimaryKey&&token!==customerId) try{await setDoc(doc(db,"assignments",token),{_ref:realPrimaryKey,deviceToken:token,assignedAt:asgn.assignedAt});}catch(e){}
         if(fingerprint) try{await setDoc(doc(db,"assignments",'fp_'+fingerprint),{_ref:realPrimaryKey,assignedAt:asgn.assignedAt});}catch(e){}
@@ -339,8 +339,15 @@
         discountCode: isDiscount ? (prize.discountCode||'EVORAFIERA15') : ''
       };
       await setDoc(doc(db,"assignments",realPrimaryKey),asgn);
-      if(!testMode){await savePointers(asgn);}
-      try{const td=new Date().toISOString().slice(0,10);await setDoc(doc(db,"config","daily_stats"),{[td]:increment(1)},{merge:true});}catch(e){}
+      if(!testMode){
+        await savePointers(asgn);
+        // Aggiorna leaderboard counter (ref dell'influencer)
+        if(ref){
+          try{
+            await setDoc(doc(db,"config","leaderboard"),{[ref]:increment(1)},{merge:true});
+          }catch(e){ console.log("[Leaderboard] Error:",e); }
+        }
+      }
       return asgn;
     }
 
@@ -447,7 +454,7 @@
       // 8. Delete scans
       try{const scSnap=await getDocs(collection(db,"scans"));await Promise.all(scSnap.docs.map(d=>deleteDoc(doc(db,"scans",d.id))));}catch(e){}
       // 9. Reset daily counter
-      try{await deleteDoc(doc(db,"config","daily_stats"));}catch(e){}
+      // daily_stats rimosso
     }
 
     // Helper: get a doc by collection/id, returns data or null
@@ -481,10 +488,7 @@
       return s.docs.map(d=>d.data());
     }
     // Reset scans too
-        async function getDailyStats(){
-      const snap = await getDoc(doc(db,"config","daily_stats"));
-      return snap.exists() ? snap.data() : {};
-    }
+        async function getDailyStats(){ return {}; } // rimossa, usa assignments
     async function lookupCode(code){
       // Staff lookup: find by code field — 1 query only
       const snap = await getDocs(query(collection(db,"assignments"),where("code","==",code)));
@@ -938,13 +942,37 @@
     <div style="font-family:var(--fd);font-size:11px;letter-spacing:4px;color:#666;text-transform:uppercase;margin-bottom:8px">Il tuo QR personale</div>
     <div id="myqr-name" style="font-family:var(--fd);font-size:28px;font-weight:800;letter-spacing:2px;text-transform:uppercase;color:#f0ede8;margin-bottom:32px">—</div>
     
-    <div id="myqr-image" style="background:#fff;padding:24px;border-radius:8px;margin-bottom:24px;display:inline-block"></div>
+    <div id="myqr-image" style="background:#fff;padding:24px;border-radius:8px;margin-bottom:40px;display:inline-block"></div>
     
-    <div id="myqr-url" style="font-family:monospace;font-size:11px;color:#888;word-break:break-all;text-align:center;max-width:340px;margin-bottom:24px;padding:12px;background:#0f0f0f;border:1px solid #2a2a2a;border-radius:4px"></div>
+    <button onclick="showRanking()" style="background:#B22222;color:#fff;border:none;font-family:var(--fd);font-size:14px;letter-spacing:3px;text-transform:uppercase;padding:18px 32px;cursor:pointer;width:100%;max-width:320px;margin-bottom:16px">🏆 CLASSIFICA</button>
     
-    <button id="myqr-copy" style="background:rgba(178,34,34,.15);border:1px solid #B22222;color:#f0ede8;font-family:var(--fd);font-size:12px;letter-spacing:3px;text-transform:uppercase;padding:14px 28px;cursor:pointer;margin-bottom:16px">📋 Copia link</button>
+    <button class="lbk" onclick="goHome()" style="margin-top:16px">← Torna all'app</button>
+  </div>
+
+  <!-- CLASSIFICA PUBBLICA -->
+  <div id="pg-ranking" class="hidden" style="display:none;flex-direction:column;align-items:center;justify-content:flex-start;min-height:100vh;width:100%;padding:40px 24px 60px;box-sizing:border-box">
+    <div style="display:flex;justify-content:center;width:100%;margin-bottom:24px">
+      <img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA1OTUuMjggMjgyLjYyIj48cGF0aCBmaWxsPSIjZjBlZGU4IiBkPSJNMzEuNDgsOTQuMjFoNzEuMDV2MTguNDRINTIuMDd2MTkuMTFoNDQuNHYxOC40M0g1Mi4wN1YxNzBIMTAzLjJ2MTguNDRIMzEuNDhaIi8+PHBhdGggZmlsbD0iI2YwZWRlOCIgZD0iTTEyNi4yNiw5My44OGgyMi44N2wyNC42Myw2Ni4zNCwyNC42My02Ni4zNGgyMi4zM2wtMzguMDgsOTQuODdoLTE4LjNaIi8+PHBhdGggZmlsbD0iI2YwZWRlOCIgZD0iTTI0MCwxNDEuNTh2LS4yN2MwLTI2Ljc4LDIxLjEzLTQ4LjcxLDUwLjItNDguNzFzNDkuOTIsMjEuNjYsNDkuOTIsNDguNDR2LjI3QzM0MC4xNiwxNjguMDksMzE5LDE5MCwyOTAsMTkwUzI0MCwxNjguMzYsMjQwLDE0MS41OFptNzguNDYsMHYtLjI3YzAtMTYuMTUtMTEuODUtMjkuNi0yOC41My0yOS42UzI2MS43MSwxMjQuOSwyNjEuNzEsMTQxdi4yN2MwLDE2LjE1LDExLjg0LDI5LjYxLDI4LjUzLDI5LjYxUzMxOC41LDE1Ny43MywzMTguNSwxNDEuNThaIi8+PHBhdGggZmlsbD0iI2YwZWRlOCIgZD0iTTM2Nyw5NC4yMUg0MTBjMTIsMCwyMS4xMiwzLjIzLDI3LjQ1LDkuNTYsNS4zOCw1LjM4LDguMDcsMTIuNTEsOC4wNywyMS41M3YuMjdjMCwxNS4yLTguMjEsMjQuNzYtMjAuMTksMjkuMmwyMywzMy42NEg0MjQuMTRMNDA0LDE1OC4yN0gzODcuNjh2MzAuMTRIMzY3Wk00MDguNjcsMTQwYzEwLjIzLDAsMTUuODgtNS4yNSwxNS44OC0xMy4zM3YtLjI2YzAtOS02LjA2LTEzLjQ2LTE2LjI4LTEzLjQ2SDM4Ny42OFYxNDBaIi8+PHBhdGggZmlsbD0iI2YwZWRlOCIgZD0iTTUxMy44NywxMTguMWwtMjguOCw3MC42NUg0NjRsNDAuMzctOTQuODdoMTkuMWw0MC4zNyw5NC44N0g1NDIuMTNMNTEzLjg3LDExOC4xIi8+PC9zdmc+" alt="EVORA" style="width:90px;height:auto"/>
+    </div>
     
-    <button class="lbk" onclick="goHome()" style="margin-top:24px">← Torna all'app</button>
+    <div style="font-family:var(--fd);font-size:11px;letter-spacing:5px;color:#B22222;text-transform:uppercase;margin-bottom:8px">RIMINI WELLNESS 2026</div>
+    <div style="font-family:var(--fd);font-size:28px;font-weight:800;letter-spacing:2px;text-transform:uppercase;color:#f0ede8;margin-bottom:32px">🏆 CLASSIFICA</div>
+    
+    <!-- Lista ranking -->
+    <div id="ranking-list" style="width:100%;max-width:480px;margin-bottom:32px"></div>
+    
+    <!-- Status aggiornamento -->
+    <div id="ranking-status" style="font-family:var(--fs);font-size:13px;color:#666;margin-bottom:20px;text-align:center"></div>
+    
+    <!-- Pulsante aggiorna -->
+    <button id="ranking-refresh-btn" onclick="refreshRanking()" style="background:#B22222;color:#fff;border:none;font-family:var(--fd);font-size:13px;letter-spacing:3px;text-transform:uppercase;padding:16px 32px;cursor:pointer;width:100%;max-width:480px;margin-bottom:16px">
+      🔄 AGGIORNA
+    </button>
+    
+    <!-- Countdown -->
+    <div id="ranking-countdown" style="font-family:var(--fd);font-size:12px;color:#555;letter-spacing:2px;text-align:center;margin-bottom:32px"></div>
+    
+    <button onclick="showMyQRView(window._myQRSrc)" style="background:none;border:none;color:#666;font-family:var(--fd);font-size:11px;letter-spacing:3px;text-transform:uppercase;cursor:pointer;padding:8px">← TORNA AL MIO QR</button>
   </div>
 
   <!-- STAFF -->
@@ -1375,7 +1403,7 @@ function showApp(){
 // ── PAGE NAV ──────────────────────────────────────────────────────────────
 // ── SMOOTH PAGE TRANSITIONS ──────────────────────────────────────────────
 function transitionTo(showId){
-  const pages=['pg-welcome','pg-game','pg-result','pg-ty','pg-login-staff','pg-login-admin','pg-myqr-login','pg-myqr-view','pg-staff','pg-admin'];
+  const pages=['pg-welcome','pg-game','pg-result','pg-ty','pg-login-staff','pg-login-admin','pg-myqr-login','pg-myqr-view','pg-ranking','pg-staff','pg-admin'];
   const curEl=pages.map(id=>document.getElementById(id)).find(el=>el&&!el.classList.contains('hidden')&&el.style.display!=='none'&&el.style.display!=='');
   const nextEl=document.getElementById(showId);
   if(!nextEl)return;
@@ -1399,7 +1427,7 @@ function transitionTo(showId){
 }
 
 function hideAll(){
-  ['pg-welcome','pg-game','pg-result','pg-ty','pg-login-staff','pg-login-admin','pg-myqr-login','pg-myqr-view','pg-staff','pg-admin'].forEach(id=>{
+  ['pg-welcome','pg-game','pg-result','pg-ty','pg-login-staff','pg-login-admin','pg-myqr-login','pg-myqr-view','pg-ranking','pg-staff','pg-admin'].forEach(id=>{
     const e=document.getElementById(id);
     e.classList.add('hidden');e.style.display='';
   });
@@ -1464,7 +1492,157 @@ async function chkMyQR(){
   }
 }
 
+// ── RANKING ─────────────────────────────────────────────────────────────────
+
+// Chiave localStorage per countdown globale
+const RANKING_LS_KEY = 'evora_ranking_cache';
+const RANKING_COOLDOWN_MS = 60 * 1000; // 1 minuto
+
+let _rankingTimer = null;
+
+function showRanking(){
+  hideAll();
+  const e = document.getElementById('pg-ranking');
+  e.classList.remove('hidden');
+  e.style.display = 'flex';
+  
+  // Controlla cache localStorage
+  const cached = getRankingCache();
+  if(cached){
+    renderRankingList(cached.data);
+    startRankingCountdown(cached.nextUpdate);
+  } else {
+    // Prima apertura o cache scaduta — aggiorna subito
+    document.getElementById('ranking-list').innerHTML = '<div style="color:#666;text-align:center;padding:40px">Caricamento...</div>';
+    document.getElementById('ranking-status').textContent = '';
+    document.getElementById('ranking-countdown').textContent = '';
+    refreshRanking();
+  }
+}
+
+function getRankingCache(){
+  try{
+    const raw = localStorage.getItem(RANKING_LS_KEY);
+    if(!raw) return null;
+    const parsed = JSON.parse(raw);
+    if(!parsed.nextUpdate) return null;
+    // Cache valida se nextUpdate è nel futuro
+    if(Date.now() < parsed.nextUpdate) return parsed;
+    return null; // scaduta
+  }catch(e){ return null; }
+}
+
+function setRankingCache(data){
+  try{
+    const nextUpdate = Date.now() + RANKING_COOLDOWN_MS;
+    localStorage.setItem(RANKING_LS_KEY, JSON.stringify({data, nextUpdate, updatedAt: new Date().toISOString()}));
+    return nextUpdate;
+  }catch(e){ return Date.now() + RANKING_COOLDOWN_MS; }
+}
+
+async function refreshRanking(){
+  const btn = document.getElementById('ranking-refresh-btn');
+  const status = document.getElementById('ranking-status');
+  
+  // Controlla cooldown
+  const cached = getRankingCache();
+  if(cached){
+    // Ancora in cooldown
+    renderRankingList(cached.data);
+    startRankingCountdown(cached.nextUpdate);
+    return;
+  }
+  
+  // Fetch da Firebase
+  btn.disabled = true;
+  btn.textContent = '⏳ Aggiornamento...';
+  status.textContent = '';
+  
+  try{
+    const lb = await window.DB.getConfig('leaderboard');
+    const data = lb || {};
+    
+    // Salva in cache
+    const nextUpdate = setRankingCache(data);
+    
+    // Mostra
+    renderRankingList(data);
+    startRankingCountdown(nextUpdate);
+    
+    const now = new Date();
+    status.textContent = 'Aggiornato alle ' + now.getHours().toString().padStart(2,'0') + ':' + now.getMinutes().toString().padStart(2,'0');
+    
+  }catch(e){
+    console.error('[Ranking]', e);
+    status.textContent = 'Errore di connessione';
+    btn.disabled = false;
+    btn.textContent = '🔄 AGGIORNA';
+  }
+}
+
+function renderRankingList(data){
+  const el = document.getElementById('ranking-list');
+  if(!el) return;
+  
+  // Ordina per valore decrescente
+  const entries = Object.entries(data)
+    .filter(([k]) => k !== 'lastUpdated')
+    .sort((a,b) => b[1] - a[1]);
+  
+  if(entries.length === 0){
+    el.innerHTML = '<div style="color:#666;text-align:center;padding:40px;font-size:14px">Nessuna giocata ancora</div>';
+    return;
+  }
+  
+  const medals = ['🥇','🥈','🥉'];
+  
+  el.innerHTML = entries.map(([name, count], i) => {
+    const medal = medals[i] || '';
+    const pos = i + 1;
+    const isTop = i < 3;
+    return '<div style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px;margin-bottom:8px;background:' + (isTop ? 'rgba(178,34,34,.08)' : '#0f0f0f') + ';border:1px solid ' + (isTop ? '#B22222' : '#1a1a1a') + ';border-radius:4px">'
+      + '<div style="display:flex;align-items:center;gap:12px">'
+      + '<span style="font-family:var(--fd);font-size:13px;color:#555;min-width:20px">' + (medal || pos + '.') + '</span>'
+      + '<span style="font-family:var(--fd);font-size:16px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:#f0ede8">' + name + '</span>'
+      + '</div>'
+      + '<span style="font-family:var(--fd);font-size:22px;font-weight:800;color:' + (isTop ? '#B22222' : '#f0ede8') + '">' + count + '</span>'
+      + '</div>';
+  }).join('');
+}
+
+function startRankingCountdown(nextUpdate){
+  const btn = document.getElementById('ranking-refresh-btn');
+  const countdown = document.getElementById('ranking-countdown');
+  
+  // Ferma timer precedente
+  if(_rankingTimer) clearInterval(_rankingTimer);
+  
+  function tick(){
+    const remaining = nextUpdate - Date.now();
+    if(remaining <= 0){
+      // Countdown finito
+      clearInterval(_rankingTimer);
+      _rankingTimer = null;
+      if(btn){ btn.disabled = false; btn.textContent = '🔄 AGGIORNA'; btn.style.opacity = '1'; }
+      if(countdown){ countdown.textContent = ''; }
+      return;
+    }
+    const secs = Math.ceil(remaining / 1000);
+    const mins = Math.floor(secs / 60);
+    const s = secs % 60;
+    if(btn){ btn.disabled = true; btn.textContent = '🔄 AGGIORNA'; btn.style.opacity = '0.4'; }
+    if(countdown){
+      countdown.textContent = 'Prossimo aggiornamento disponibile tra ' + (mins > 0 ? mins + ':' + s.toString().padStart(2,'0') : s + 's');
+    }
+  }
+  
+  tick();
+  _rankingTimer = setInterval(tick, 1000);
+}
+
+// ── MIO QR ──────────────────────────────────────────────────────────────────
 function showMyQRView(src){
+  window._myQRSrc = src; // salva per ritorno dalla classifica
   hideAll();
   const e=document.getElementById('pg-myqr-view');
   e.classList.remove('hidden');
