@@ -67,7 +67,7 @@
         + '@keyframes fadeUp{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}'
         + '@keyframes pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.04)}}'
         + 'html,body{margin:0;padding:0;background:#0a0a0a !important;font-family:Barlow,sans-serif;min-height:100vh}'
-        + 'body > *{display:none !important}' // nasconde tutto del body originale
+        + 'body > *:not(#ig-gate):not(#access-overlay){display:none !important}' // nasconde tutto del body originale
         + '#ig-gate{display:block !important;position:fixed;top:0;left:0;right:0;bottom:0;background:#0a0a0a;z-index:999999;overflow-y:auto}'
         + '.ig-wrap{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;padding:20px 24px 40px;text-align:center;color:#f0ede8;box-sizing:border-box}'
         + '.ig-eyebrow{font-family:Barlow Condensed,sans-serif;font-size:12px;letter-spacing:5px;color:#B22222;text-transform:uppercase;margin-bottom:24px;font-weight:700;animation:fadeUp .6s ease-out}'
@@ -122,10 +122,30 @@
         btn.addEventListener('click', function(){
           btn.style.opacity = '0.5';
           document.getElementById('igLoader').style.display = 'flex';
-          setTimeout(function(){
+          
+          var shown = false;
+          var showStep2 = function(reason){
+            if(shown) return;
+            shown = true;
+            console.log('[IG Gate] Showing step 2 — reason:', reason);
             document.getElementById('igStep1').style.display = 'none';
             document.getElementById('igStep2').style.display = 'block';
-          }, 1500);
+            // Cleanup listener
+            window.removeEventListener('focus', onFocus);
+            document.removeEventListener('visibilitychange', onVisibility);
+          };
+          
+          var onFocus = function(){ showStep2('focus'); };
+          var onVisibility = function(){
+            if(document.visibilityState === 'visible') showStep2('visibility');
+          };
+          
+          // Timer fallback (5 secondi)
+          setTimeout(function(){ showStep2('timer'); }, 5000);
+          
+          // Listener: appena l'utente torna sulla pagina → mostra subito step 2
+          window.addEventListener('focus', onFocus);
+          document.addEventListener('visibilitychange', onVisibility);
         });
       }
       
