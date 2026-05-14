@@ -7,6 +7,129 @@
   <title>Evora — Fiera 2026</title>
   <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@300;400;500;600;700;800;900&family=Cormorant+Garamond:wght@400;600;700&display=swap" rel="stylesheet"/>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  
+  <!-- ══════════════════════════════════════════════════════════════
+       QR INSTAGRAM GATE - intercetta SUBITO prima del module Firebase
+       ══════════════════════════════════════════════════════════════ -->
+  <script>
+  (function(){
+    var params = new URLSearchParams(window.location.search);
+    var uRef = params.get('ref') || '';
+    var uCustomerId = params.get('customer_id') || params.get('shopify_customer_id') || '';
+    var uEmail = params.get('email') || '';
+    var isQRScanMode = uRef && !uCustomerId && !uEmail;
+    
+    if(!isQRScanMode) return; // continua col gioco normale
+    
+    console.log('[QR Gate] Instagram gate attivo - Ref:', uRef);
+    
+    // Marca che siamo in modalità QR (serve a bloccare init Firebase)
+    window.__IS_QR_MODE = true;
+    
+    var INSTAGRAM_URL = 'https://www.instagram.com/evora_fitness?igsh=MWdyaWd5eDk3b3FhcQ==';
+    var SHOPIFY_FORM = 'https://evorafitness.it/pages/fiera-rimini-wellness-2026';
+    
+    // Salva scan in background
+    var FIREBASE_PROJECT = 'evora-fiera';
+    var FIREBASE_API_KEY = 'AIzaSyBeHgXy0V1YqIWP8HruIZ4rztIaNfXsUxk';
+    var scanId = 'scan_' + uRef + '_' + Date.now() + '_' + Math.random().toString(36).substr(2,5);
+    var scanUrl = 'https://firestore.googleapis.com/v1/projects/' + FIREBASE_PROJECT + '/databases/(default)/documents/scans/' + scanId + '?key=' + FIREBASE_API_KEY;
+    fetch(scanUrl, {
+      method: 'PATCH',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        fields: {
+          ref: {stringValue: uRef},
+          scannedAt: {stringValue: new Date().toISOString()}
+        }
+      })
+    }).then(function(){ console.log('[QR Gate] Scan salvato:', uRef); })
+      .catch(function(e){ console.log('[QR Gate] Errore scan:', e); });
+    
+    // Aspetta il DOM
+    function renderPage(){
+      document.documentElement.innerHTML = ''
+        + '<head>'
+        + '<meta charset="UTF-8"/>'
+        + '<meta name="viewport" content="width=device-width,initial-scale=1.0,user-scalable=no"/>'
+        + '<title>EVORΛ Fitness</title>'
+        + '<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500&family=Barlow+Condensed:wght@700;800&display=swap" rel="stylesheet"/>'
+        + '<style>'
+        + '@keyframes spin{to{transform:rotate(360deg)}}'
+        + '@keyframes fadeUp{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}'
+        + '@keyframes pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.04)}}'
+        + 'html,body{margin:0;padding:0;background:#0a0a0a;font-family:Barlow,sans-serif;overflow-x:hidden;min-height:100vh}'
+        + '.ig-wrap{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px 24px;text-align:center;color:#f0ede8;box-sizing:border-box}'
+        + '.ig-eyebrow{font-family:Barlow Condensed,sans-serif;font-size:12px;letter-spacing:5px;color:#B22222;text-transform:uppercase;margin-bottom:24px;font-weight:700;animation:fadeUp .6s ease-out}'
+        + '.ig-title{font-family:Barlow Condensed,sans-serif;font-size:54px;font-weight:800;letter-spacing:1px;text-transform:uppercase;line-height:.95;margin-bottom:18px;animation:fadeUp .7s ease-out}'
+        + '.ig-title span{display:block;color:#B22222}'
+        + '.ig-divider{width:60px;height:3px;background:#B22222;margin:24px auto 28px;animation:fadeUp .8s ease-out}'
+        + '.ig-sub{font-size:16px;line-height:1.5;color:#bbb;max-width:380px;margin-bottom:48px;animation:fadeUp .9s ease-out}'
+        + '.ig-btn{display:inline-flex;align-items:center;justify-content:center;gap:12px;background:#B22222;color:#fff;font-family:Barlow Condensed,sans-serif;font-size:18px;letter-spacing:3px;font-weight:700;text-transform:uppercase;padding:22px 40px;border:none;text-decoration:none;cursor:pointer;min-width:280px;animation:pulse 2s ease-in-out infinite}'
+        + '.ig-btn:active{background:#cc2929}'
+        + '.ig-step2{display:none;animation:fadeUp .5s ease-out}'
+        + '.ig-loader{display:none;flex-direction:column;align-items:center;gap:16px;margin-top:32px}'
+        + '.ig-spinner{width:40px;height:40px;border:3px solid rgba(178,34,34,0.2);border-top-color:#B22222;border-radius:50%;animation:spin .8s linear infinite}'
+        + '.ig-loader-txt{font-size:13px;color:#888;letter-spacing:1px}'
+        + '.ig-ready-emoji{font-size:54px;margin-bottom:16px;animation:pulse 1.5s ease-in-out infinite}'
+        + '.ig-ready-title{font-family:Barlow Condensed,sans-serif;font-size:32px;font-weight:800;letter-spacing:1px;text-transform:uppercase;margin-bottom:32px;color:#fff}'
+        + '@media (max-width:480px){.ig-title{font-size:42px}.ig-eyebrow{font-size:11px;letter-spacing:4px}.ig-btn{font-size:15px;padding:18px 28px;letter-spacing:2px;min-width:240px}}'
+        + '</style>'
+        + '</head>'
+        + '<body>'
+        + '<div class="ig-wrap">'
+        + '<div class="ig-eyebrow">EVORΛ FITNESS — RIMINI WELLNESS</div>'
+        + '<h1 class="ig-title">VINCI PREMI<span>EVORΛ</span></h1>'
+        + '<div class="ig-divider"></div>'
+        + '<div class="ig-step1" id="igStep1">'
+        + '<p class="ig-sub">Seguici su Instagram per partecipare all\'iniziativa promozionale</p>'
+        + '<a href="' + INSTAGRAM_URL + '" target="_blank" class="ig-btn" id="igBtn">'
+        + '<svg width="24" height="24" viewBox="0 0 24 24" fill="none">'
+        + '<rect x="2" y="2" width="20" height="20" rx="5" stroke="white" stroke-width="2"/>'
+        + '<circle cx="12" cy="12" r="4" stroke="white" stroke-width="2"/>'
+        + '<circle cx="17.5" cy="6.5" r="1.2" fill="white"/>'
+        + '</svg>'
+        + 'SEGUI SU INSTAGRAM'
+        + '</a>'
+        + '<div class="ig-loader" id="igLoader">'
+        + '<div class="ig-spinner"></div>'
+        + '<div class="ig-loader-txt">Verifica in corso...</div>'
+        + '</div>'
+        + '</div>'
+        + '<div class="ig-step2" id="igStep2">'
+        + '<div class="ig-ready-emoji">🎁</div>'
+        + '<div class="ig-ready-title">Pronto a giocare?</div>'
+        + '<a href="' + SHOPIFY_FORM + '" class="ig-btn">GIOCA ORA →</a>'
+        + '</div>'
+        + '</div>'
+        + '</body>';
+      
+      // Aggiungo event listener al pulsante (innerHTML script non si eseguono)
+      var btn = document.getElementById('igBtn');
+      if(btn){
+        btn.addEventListener('click', function(){
+          btn.style.opacity = '0.5';
+          document.getElementById('igLoader').style.display = 'flex';
+          setTimeout(function(){
+            document.getElementById('igStep1').style.display = 'none';
+            document.getElementById('igStep2').style.display = 'block';
+          }, 1500);
+        });
+      }
+    }
+    
+    // Esegui quando il DOM è pronto
+    if(document.readyState === 'loading'){
+      document.addEventListener('DOMContentLoaded', renderPage);
+    } else {
+      renderPage();
+    }
+    
+    // Blocca caricamento del module Firebase rimuovendo gli script type=module
+    // (non possiamo fermarli dopo che sono partiti, ma li puliamo da innerHTML)
+  })();
+  </script>
+  
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
     import { getFirestore,doc,getDoc,setDoc,updateDoc,deleteDoc,collection,getDocs,query,orderBy,where,runTransaction,onSnapshot,increment } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
@@ -940,132 +1063,7 @@ const uName=params.get('name')||params.get('first_name')||'Ospite';
 const uEmail=params.get('email')||'';
 const uRef=params.get('ref')||''; // QR tracking source
 
-// ══════════════════════════════════════════════════════════════════
-// QR TRACKER MODE - Se arriva solo con ?ref= (senza customer_id/email)
-// salva scan su Firebase e redirect al form Shopify
-// ══════════════════════════════════════════════════════════════════
-const uCustomerId_temp=params.get('customer_id')||params.get('shopify_customer_id')||'';
-const isQRScanMode = uRef && !uCustomerId_temp && !uEmail;
-
-if(isQRScanMode){
-  console.log('[QR Mode] Instagram gate attivo - Ref:', uRef);
-  
-  // Salva scan in background (parte subito senza bloccare UI)
-  (async function(){
-    const FIREBASE_PROJECT = 'evora-fiera';
-    const FIREBASE_API_KEY = 'AIzaSyBeHgXy0V1YqIWP8HruIZ4rztIaNfXsUxk';
-    const scanId = 'scan_' + uRef + '_' + Date.now() + '_' + Math.random().toString(36).substr(2,5);
-    const url = `https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT}/databases/(default)/documents/scans/${scanId}?key=${FIREBASE_API_KEY}`;
-    try{
-      await fetch(url, {
-        method: 'PATCH',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({
-          fields: {
-            ref: {stringValue: uRef},
-            scannedAt: {stringValue: new Date().toISOString()}
-          }
-        })
-      });
-      console.log('[QR Mode] ✅ Scan salvato:', uRef);
-    }catch(e){
-      console.log('[QR Mode] Errore:', e);
-    }
-  })();
-  
-  // Mostra Instagram Gate
-  const INSTAGRAM_URL = 'https://www.instagram.com/evora_fitness?igsh=MWdyaWd5eDk3b3FhcQ==';
-  
-  document.body.innerHTML = `
-    <style>
-      @keyframes spin{to{transform:rotate(360deg)}}
-      @keyframes fadeUp{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
-      @keyframes pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.04)}}
-      body{margin:0;padding:0;background:#0a0a0a;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;overflow-x:hidden}
-      .ig-wrap{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px 24px;text-align:center;color:#f0ede8}
-      .ig-eyebrow{font-family:'Barlow Condensed',sans-serif;font-size:12px;letter-spacing:5px;color:#B22222;text-transform:uppercase;margin-bottom:24px;font-weight:700;animation:fadeUp .6s ease-out}
-      .ig-title{font-family:'Barlow Condensed',sans-serif;font-size:54px;font-weight:800;letter-spacing:1px;text-transform:uppercase;line-height:.95;margin-bottom:18px;animation:fadeUp .7s ease-out}
-      .ig-title span{display:block;color:#B22222}
-      .ig-divider{width:60px;height:3px;background:#B22222;margin:24px auto 28px;animation:fadeUp .8s ease-out}
-      .ig-sub{font-size:16px;line-height:1.5;color:#bbb;max-width:380px;margin-bottom:48px;animation:fadeUp .9s ease-out}
-      
-      .ig-step1{animation:fadeUp .6s ease-out}
-      .ig-step2{display:none;animation:fadeUp .5s ease-out}
-      
-      .ig-btn{display:inline-flex;align-items:center;justify-content:center;gap:12px;background:#B22222;color:#fff;font-family:'Barlow Condensed',sans-serif;font-size:18px;letter-spacing:3px;font-weight:700;text-transform:uppercase;padding:22px 40px;border:none;text-decoration:none;cursor:pointer;min-width:280px;animation:pulse 2s ease-in-out infinite}
-      .ig-btn:hover{background:#cc2929}
-      .ig-btn svg{flex-shrink:0}
-      
-      .ig-loader{display:none;flex-direction:column;align-items:center;gap:16px;margin-top:32px}
-      .ig-spinner{width:40px;height:40px;border:3px solid rgba(178,34,34,0.2);border-top-color:#B22222;border-radius:50%;animation:spin .8s linear infinite}
-      .ig-loader-txt{font-size:13px;color:#888;letter-spacing:1px}
-      
-      .ig-ready-emoji{font-size:54px;margin-bottom:16px;animation:pulse 1.5s ease-in-out infinite}
-      .ig-ready-title{font-family:'Barlow Condensed',sans-serif;font-size:32px;font-weight:800;letter-spacing:1px;text-transform:uppercase;margin-bottom:32px;color:#fff}
-      
-      @media (max-width:480px){
-        .ig-title{font-size:42px}
-        .ig-eyebrow{font-size:11px;letter-spacing:4px}
-        .ig-btn{font-size:15px;padding:18px 28px;letter-spacing:2px;min-width:240px}
-      }
-    </style>
-    
-    <div class="ig-wrap">
-      <div class="ig-eyebrow">EVORΛ FITNESS — RIMINI WELLNESS</div>
-      
-      <h1 class="ig-title">VINCI PREMI<span>EVORΛ</span></h1>
-      
-      <div class="ig-divider"></div>
-      
-      <!-- STEP 1: Segui su Instagram -->
-      <div class="ig-step1" id="igStep1">
-        <p class="ig-sub">Seguici su Instagram per partecipare all'iniziativa promozionale</p>
-        
-        <a href="${INSTAGRAM_URL}" target="_blank" class="ig-btn" onclick="igClick()">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-            <rect x="2" y="2" width="20" height="20" rx="5" stroke="white" stroke-width="2"/>
-            <circle cx="12" cy="12" r="4" stroke="white" stroke-width="2"/>
-            <circle cx="17.5" cy="6.5" r="1.2" fill="white"/>
-          </svg>
-          SEGUI SU INSTAGRAM
-        </a>
-        
-        <div class="ig-loader" id="igLoader">
-          <div class="ig-spinner"></div>
-          <div class="ig-loader-txt">Verifica in corso...</div>
-        </div>
-      </div>
-      
-      <!-- STEP 2: Pronto a giocare -->
-      <div class="ig-step2" id="igStep2">
-        <div class="ig-ready-emoji">🎁</div>
-        <div class="ig-ready-title">Pronto a giocare?</div>
-        
-        <a href="${SHOPIFY_FORM_URL}" class="ig-btn">
-          GIOCA ORA →
-        </a>
-      </div>
-    </div>
-    
-    <script>
-    </script>
-  `;
-  
-  // Definisce igClick GLOBALMENTE (i <script> dentro innerHTML non si eseguono)
-  window.igClick = function(){
-    document.querySelector('.ig-btn').style.opacity = '0.5';
-    document.getElementById('igLoader').style.display = 'flex';
-    setTimeout(function(){
-      document.getElementById('igStep1').style.display = 'none';
-      document.getElementById('igStep2').style.display = 'block';
-    }, 1500);
-  };
-  
-  // STOP: il resto del codice del gioco non deve eseguirsi in modalità QR
-  // (eviterebbe errori di Firebase init e altri side effect)
-  // nessun throw - usiamo un flag globale
-  window.__QR_MODE_ACTIVE = true;
-}
+// QR Mode gestito in <head> con script normale
 
 // Shopify customer_id è il token primario (da link email Flow)
 // Fallback: token device legacy (per test / accesso diretto)
@@ -1074,10 +1072,7 @@ const uToken=uCustomerId || params.get('token') || `demo_${Date.now()}`;
 
 window._uRef=uRef;
 
-// In modalità QR (Instagram gate) NON inizializziamo il gioco vero
-if(!window.__QR_MODE_ACTIVE){
-  _initCUserEarly();
-}
+_initCUserEarly();
 
 // ── REGULATION STATE ──────────────────────────────────────────────────────
 const DEFAULT_DATES=['2026-05-28','2026-05-29','2026-05-30','2026-05-31'];
@@ -1363,24 +1358,4 @@ function todayStr(){
 function isValidFairDay(){
   const today=todayStr();
   const validDates=regDays.map(d=>d.date).filter(Boolean);
-  // No dates configured yet → allow (admin hasn't set up, or testing)
-  if(!validDates.length) return true;
-  // If all dates are the default placeholder dates AND none match today,
-  // check if they are truly custom dates or just defaults never changed
-  return validDates.includes(today);
-}
-
-// Returns the configured fair dates formatted nicely
-function fairDatesLabel(){
-  const dates=regDays.map(d=>d.date).filter(Boolean);
-  if(!dates.length) return '28–31 maggio 2026';
-  return dates.map(d=>{
-    const parts=d.split('-');
-    const months=['','gennaio','febbraio','marzo','aprile','maggio','giugno','luglio','agosto','settembre','ottobre','novembre','dicembre'];
-    return `${parseInt(parts[2])} ${months[parseInt(parts[1])]}`;
-  }).join(', ');
-}
-
-async function doShowGame(){
-  // ── FETCH FRESH CONFIG FROM FIREBASE ─────────────────────────────────────
-  // Re-read testMode so game always uses latest 
+  // No dates configured yet → allow (admin hasn't set up, o
