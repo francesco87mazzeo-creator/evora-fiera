@@ -1734,6 +1734,8 @@ function initScratch(){
       if(onDone)onDone();
     };
     img.onerror=()=>{ctx.globalCompositeOperation='destination-out';const pbgEl=document.getElementById('pbg');if(pbgEl)pbgEl.style.opacity='1';if(onDone)onDone();};
+    // Fallback timeout per iOS/Safari lenti
+    setTimeout(()=>{if(ctx.globalCompositeOperation!=='destination-out'){ctx.globalCompositeOperation='destination-out';const pbgEl=document.getElementById('pbg');if(pbgEl)pbgEl.style.opacity='1';if(onDone)onDone();}}, 2000);
     img.src='data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA1OTUuMjggMjgyLjYyIj48cGF0aCBmaWxsPSIjY2MyMjIyIiBkPSJNMzEuNDgsOTQuMjFoNzEuMDV2MTguNDRINTIuMDd2MTkuMTFoNDQuNHYxOC40M0g1Mi4wN1YxNzBIMTAzLjJ2MTguNDRIMzEuNDhaIi8+PHBhdGggZmlsbD0iI2NjMjIyMiIgZD0iTTEyNi4yNiw5My44OGgyMi44N2wyNC42Myw2Ni4zNCwyNC42My02Ni4zNGgyMi4zM2wtMzguMDgsOTQuODdoLTE4LjNaIi8+PHBhdGggZmlsbD0iI2NjMjIyMiIgZD0iTTI0MCwxNDEuNTh2LS4yN2MwLTI2Ljc4LDIxLjEzLTQ4LjcxLDUwLjItNDguNzFzNDkuOTIsMjEuNjYsNDkuOTIsNDguNDR2LjI3QzM0MC4xNiwxNjguMDksMzE5LDE5MCwyOTAsMTkwUzI0MCwxNjguMzYsMjQwLDE0MS41OFptNzguNDYsMHYtLjI3YzAtMTYuMTUtMTEuODUtMjkuNi0yOC41My0yOS42UzI2MS43MSwxMjQuOSwyNjEuNzEsMTQxdi4yN2MwLDE2LjE1LDExLjg0LDI5LjYxLDI4LjUzLDI5LjYxUzMxOC41LDE1Ny43MywzMTguNSwxNDEuNThaIi8+PHBhdGggZmlsbD0iI2NjMjIyMiIgZD0iTTM2Nyw5NC4yMUg0MTBjMTIsMCwyMS4xMiwzLjIzLDI3LjQ1LDkuNTYsNS4zOCw1LjM4LDguMDcsMTIuNTEsOC4wNywyMS41M3YuMjdjMCwxNS4yLTguMjEsMjQuNzYtMjAuMTksMjkuMmwyMywzMy42NEg0MjQuMTRMNDA0LDE1OC4yN0gzODcuNjh2MzAuMTRIMzY3Wk00MDguNjcsMTQwYzEwLjIzLDAsMTUuODgtNS4yNSwxNS44OC0xMy4zM3YtLjI2YzAtOS02LjA2LTEzLjQ2LTE2LjI4LTEzLjQ2SDM4Ny42OFYxNDBaIi8+PHBhdGggZmlsbD0iI2NjMjIyMiIgZD0iTTUxMy44NywxMTguMWwtMjguOCw3MC42NUg0NjRsNDAuMzctOTQuODdoMTkuMWw0MC4zNyw5NC44N0g1NDIuMTNMNTEzLjg3LDExOC4xIi8+PC9zdmc+';
   }
 
@@ -2737,7 +2739,9 @@ async function addEmergencyExtension(){
     return;
   }
   
-  if(!confirm(`Aggiungo ${total} giocate extra (${bags} zaini + ${total-bags} sconti)?\n\nQuesta azione non si può annullare.`)){
+  const cutoffPreview=Math.floor(total*0.8);
+  const bagsPosNote=bags>0?`\n🎒 Gli zaini usciranno solo dalla posizione ${cutoffPreview+1} in poi (ultimo 20%)`:'';
+  if(!confirm(`Aggiungo ${total} giocate extra (${bags} zaini + ${total-bags} sconti)?${bagsPosNote}\n\nQuesta azione non si può annullare.`)){
     return;
   }
   
@@ -2748,25 +2752,61 @@ async function addEmergencyExtension(){
     const existing=await window.DB.getDoc_("sequences","emergency");
     const existingPrizes=existing?(existing.prizes||[]):[];
     
-    // Genera nuovi slot
-    const newSlots=[];
-    for(let i=0;i<bags;i++){
-      newSlots.push({name:'Zaino Evora',emoji:'🎒',value:59,type:'prize'});
-    }
+    // ═══════════════════════════════════════════════════════════════
+    // GENERAZIONE SLOT CON ZAINI POSIZIONATI NELL'ULTIMO 20%
+    // ═══════════════════════════════════════════════════════════════
     const discountCount=total-bags;
-    for(let i=0;i<discountCount;i++){
-      newSlots.push({
-        name:'Sconto 15%',
-        emoji:'🎟️',
-        value:0,
-        type:'discount',
-        discountCode:'EVORAFIERA15'
-      });
+    
+    // Crea oggetti base
+    const bagObj={name:'Zaino Evora',emoji:'🎒',value:59,type:'prize'};
+    const discountObj={
+      name:'Sconto 15%',
+      emoji:'🎟️',
+      value:0,
+      type:'discount',
+      discountCode:'EVORAFIERA15'
+    };
+    
+    // Divisione in due zone:
+    // - Prima zona (80%): solo sconti
+    // - Seconda zona (ultimo 20%): zaini distribuiti random tra gli sconti
+    const cutoff=Math.floor(total*0.8); // posizione 80%
+    const slotsBeforeCutoff=cutoff;     // tutti sconti
+    const slotsAfterCutoff=total-cutoff; // qui dentro stanno gli zaini
+    
+    let shuffled=[];
+    
+    if(bags===0){
+      // Solo sconti, mescola tutto
+      for(let i=0;i<total;i++) shuffled.push({...discountObj});
+    } else if(bags>=slotsAfterCutoff){
+      // Caso limite: più zaini del 20% disponibile → metti tutti dopo cutoff
+      // (anche se sovrappongono il 20%)
+      for(let i=0;i<slotsBeforeCutoff;i++) shuffled.push({...discountObj});
+      // Crea l'ultimo blocco con tutti gli zaini + eventuali sconti rimanenti
+      const lastBlock=[];
+      for(let i=0;i<bags;i++) lastBlock.push({...bagObj});
+      const remainingDiscounts=slotsAfterCutoff-bags;
+      for(let i=0;i<remainingDiscounts;i++) lastBlock.push({...discountObj});
+      const seed=Date.now()%1000000;
+      shuffled=[...shuffled,...seededShuffle(lastBlock,seed)];
+    } else {
+      // Caso normale: zaini < 20% del totale
+      // Prima zona: tutti sconti (slotsBeforeCutoff slot)
+      for(let i=0;i<slotsBeforeCutoff;i++) shuffled.push({...discountObj});
+      
+      // Seconda zona (ultimo 20%): bags zaini + (slotsAfterCutoff-bags) sconti, mescolati
+      const lastBlock=[];
+      for(let i=0;i<bags;i++) lastBlock.push({...bagObj});
+      const discInLastBlock=slotsAfterCutoff-bags;
+      for(let i=0;i<discInLastBlock;i++) lastBlock.push({...discountObj});
+      
+      const seed=Date.now()%1000000;
+      const shuffledLast=seededShuffle(lastBlock,seed);
+      shuffled=[...shuffled,...shuffledLast];
     }
     
-    // Mescola i nuovi slot
-    const seed=Date.now()%1000000;
-    const shuffled=seededShuffle(newSlots,seed);
+    console.log("[Emergency] Cutoff posizione:",cutoff,"di",total,"| Zaini in ultimo 20%:",bags);
     
     // Concatena con eventuali estensioni precedenti
     const finalSeq=[...existingPrizes,...shuffled];
