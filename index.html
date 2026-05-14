@@ -1048,19 +1048,23 @@ if(isQRScanMode){
     </div>
     
     <script>
-      function igClick(){
-        // Mostra spinner sotto al pulsante
-        document.querySelector('.ig-btn').style.opacity = '0.5';
-        document.getElementById('igLoader').style.display = 'flex';
-        
-        // Dopo 1.5s mostra step 2 (un po' di tempo perché Instagram apra)
-        setTimeout(function(){
-          document.getElementById('igStep1').style.display = 'none';
-          document.getElementById('igStep2').style.display = 'block';
-        }, 1500);
-      }
     </script>
   `;
+  
+  // Definisce igClick GLOBALMENTE (i <script> dentro innerHTML non si eseguono)
+  window.igClick = function(){
+    document.querySelector('.ig-btn').style.opacity = '0.5';
+    document.getElementById('igLoader').style.display = 'flex';
+    setTimeout(function(){
+      document.getElementById('igStep1').style.display = 'none';
+      document.getElementById('igStep2').style.display = 'block';
+    }, 1500);
+  };
+  
+  // STOP: il resto del codice del gioco non deve eseguirsi in modalità QR
+  // (eviterebbe errori di Firebase init e altri side effect)
+  // nessun throw - usiamo un flag globale
+  window.__QR_MODE_ACTIVE = true;
 }
 
 // Shopify customer_id è il token primario (da link email Flow)
@@ -1069,7 +1073,11 @@ const uCustomerId=params.get('customer_id')||'';
 const uToken=uCustomerId || params.get('token') || `demo_${Date.now()}`;
 
 window._uRef=uRef;
-_initCUserEarly();
+
+// In modalità QR (Instagram gate) NON inizializziamo il gioco vero
+if(!window.__QR_MODE_ACTIVE){
+  _initCUserEarly();
+}
 
 // ── REGULATION STATE ──────────────────────────────────────────────────────
 const DEFAULT_DATES=['2026-05-28','2026-05-29','2026-05-30','2026-05-31'];
@@ -1375,10 +1383,4 @@ function fairDatesLabel(){
 
 async function doShowGame(){
   // ── FETCH FRESH CONFIG FROM FIREBASE ─────────────────────────────────────
-  // Re-read testMode so game always uses latest admin settings (including selected day)
-  try{
-    const tm=await window.DB.getConfig('testMode');
-    if(tm&&typeof tm==='object'){
-      testModeReplay=!!tm.replay;
-      testModeDate=!!tm.date;
-      if(typeof tm.day==='number') selectedTestDay=tm.day
+  // Re-read testMode so game always uses latest 
