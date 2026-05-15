@@ -54,20 +54,24 @@
     }).then(function(){ console.log('[QR Gate] Scan salvato:', uRef); })
       .catch(function(e){ console.log('[QR Gate] Errore scan:', e); });
     
-    // Aggiorna leaderboard counter per le scansioni (REST API Firestore)
-    var lbUrl = 'https://firestore.googleapis.com/v1/projects/' + FIREBASE_PROJECT + '/databases/(default)/documents/config/leaderboard?key=' + FIREBASE_API_KEY;
+    // Aggiorna leaderboard con increment via REST (usa fieldTransforms)
+    var lbUrl = 'https://firestore.googleapis.com/v1/projects/' + FIREBASE_PROJECT + '/databases/(default)/documents:commit?key=' + FIREBASE_API_KEY;
     fetch(lbUrl, {
-      method: 'PATCH',
+      method: 'POST',
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({
-        fields: {
-          [uRef]: {integerValue: '1'} // sarà incrementato con transform
-        }
+        writes: [{
+          transform: {
+            document: 'projects/' + FIREBASE_PROJECT + '/databases/(default)/documents/config/leaderboard',
+            fieldTransforms: [{
+              fieldPath: uRef,
+              increment: {integerValue: '1'}
+            }]
+          }
+        }]
       })
-    }).catch(function(){});
-    // Nota: Firestore REST non supporta increment() direttamente
-    // usiamo una write separata che legge e aggiorna
-    // Per ora contiamo le giocate complete (più affidabile)
+    }).then(function(){ console.log('[QR Gate] Leaderboard aggiornato per:', uRef); })
+      .catch(function(e){ console.log('[QR Gate] Leaderboard error:', e); });
     
     // Aspetta il DOM
     function renderPage(){
