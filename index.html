@@ -168,6 +168,63 @@
         });
       }
       
+      // Login MyQR come overlay sopra il gate (senza ricaricare)
+      function showMyQRLoginOverlay(){
+        var overlay = document.createElement('div');
+        overlay.id = 'myqr-login-overlay';
+        overlay.style.cssText = 'position:fixed;inset:0;background:#0a0a0a;z-index:9999999;display:flex;align-items:center;justify-content:center;padding:24px;box-sizing:border-box';
+        overlay.innerHTML = ''
+          + '<div style="width:100%;max-width:360px;text-align:center">'
+          + '<div style="font-family:Barlow Condensed,sans-serif;font-size:11px;letter-spacing:4px;color:#666;text-transform:uppercase;margin-bottom:24px">Il tuo QR personale</div>'
+          + '<div style="font-family:Barlow Condensed,sans-serif;font-size:13px;letter-spacing:2px;color:#888;text-transform:uppercase;margin-bottom:12px;text-align:left">Nome utente</div>'
+          + '<input id="myqr-ol-input" type="text" placeholder="Inserisci il tuo nome" autocapitalize="off" autocomplete="off" style="width:100%;padding:16px;background:#111;border:1px solid #2a2a2a;color:#f0ede8;font-family:Barlow,sans-serif;font-size:16px;box-sizing:border-box;margin-bottom:8px;outline:none"/>'
+          + '<div id="myqr-ol-err" style="color:#f66;font-size:13px;min-height:20px;margin-bottom:12px"></div>'
+          + '<button id="myqr-ol-btn" style="width:100%;padding:18px;background:#B22222;border:none;color:#fff;font-family:Barlow Condensed,sans-serif;font-size:14px;letter-spacing:3px;text-transform:uppercase;cursor:pointer;margin-bottom:16px">ACCEDI</button>'
+          + '<button id="myqr-ol-back" style="width:100%;padding:12px;background:transparent;border:none;color:#555;font-family:Barlow Condensed,sans-serif;font-size:11px;letter-spacing:3px;text-transform:uppercase;cursor:pointer">← Indietro</button>'
+          + '</div>';
+        document.body.appendChild(overlay);
+        setTimeout(function(){ var i=document.getElementById('myqr-ol-input'); if(i)i.focus(); },100);
+        
+        // Indietro → rimuovi overlay, torna al gate
+        document.getElementById('myqr-ol-back').addEventListener('click', function(){ overlay.remove(); });
+        
+        // Accedi
+        async function doLogin(){
+          var input = document.getElementById('myqr-ol-input');
+          var errEl = document.getElementById('myqr-ol-err');
+          var btn = document.getElementById('myqr-ol-btn');
+          var val = input ? input.value.trim() : '';
+          if(!val){ if(errEl) errEl.textContent='Inserisci il tuo nome'; return; }
+          if(errEl) errEl.textContent='';
+          if(btn) btn.textContent='Caricamento...';
+          try{
+            var PROJ='evora-fiera', KEY='AIzaSyBeHgXy0V1YqIWP8HruIZ4rztIaNfXsUxk';
+            var resp = await fetch('https://firestore.googleapis.com/v1/projects/'+PROJ+'/databases/(default)/documents/config/qr_sources?key='+KEY);
+            var data = await resp.json();
+            var sources=[];
+            if(data.fields&&data.fields.value&&data.fields.value.arrayValue){
+              (data.fields.value.arrayValue.values||[]).forEach(function(item){
+                if(item.mapValue&&item.mapValue.fields){
+                  var f=item.mapValue.fields;
+                  sources.push({id:(f.id&&f.id.stringValue)||'',name:(f.name&&f.name.stringValue)||''});
+                }
+              });
+            }
+            var norm=val.toLowerCase();
+            var match=sources.find(function(s){return (s.id||'').toLowerCase()===norm||(s.name||'').toLowerCase()===norm;});
+            if(!match){ if(errEl)errEl.textContent='Nome non trovato'; if(btn)btn.textContent='ACCEDI'; return; }
+            // Trovato — vai alla pagina QR
+            overlay.remove();
+            window.location.replace(window.location.origin+window.location.pathname+'?myqr='+encodeURIComponent(match.id)+'#myqr');
+          }catch(e){
+            if(errEl)errEl.textContent='Errore di connessione';
+            if(btn)btn.textContent='ACCEDI';
+          }
+        }
+        document.getElementById('myqr-ol-btn').addEventListener('click', doLogin);
+        document.getElementById('myqr-ol-input').addEventListener('keydown', function(e){ if(e.key==='Enter') doLogin(); });
+      }
+      
       // Menu accesso visivo (DEFINITO PRIMA del listener!)
       function showAccessMenu(){
         var menu = document.createElement('div');
@@ -192,7 +249,13 @@
           var cleanUrl = window.location.origin + window.location.pathname + hash;
           window.location.replace(cleanUrl);
         }
-        document.getElementById('goMyQRBtn').addEventListener('click', function(){ goTo('#myqr'); });
+        document.getElementById('goMyQRBtn').addEventListener('click', function(){
+          // Chiudi il menu accesso
+          var m = document.getElementById('access-overlay');
+          if(m) m.remove();
+          // Mostra login MyQR come overlay sopra il gate Instagram
+          showMyQRLoginOverlay();
+        });
         document.getElementById('goStaffBtn').addEventListener('click', function(){ goTo('#staff'); });
         document.getElementById('goAdminBtn').addEventListener('click', function(){ goTo('#admin'); });
         document.getElementById('cancelAccessBtn').addEventListener('click', function(){
@@ -1180,4 +1243,2504 @@
       
       <div style="margin-top:24px;padding-top:16px;border-top:1px solid #2a2a2a">
         <div class="adss" style="margin-bottom:8px;color:#888">Hai aggiunto un'estensione errata? Puoi cancellare TUTTE le estensioni emergenza (le giocate già fatte restano valide).</div>
-        <button class="adbb" style="background:#ff6b6b
+        <button class="adbb" style="background:#ff6b6b;color:#fff;width:100%" onclick="clearEmergencyExtensions()">🗑 CANCELLA TUTTE LE ESTENSIONI</button>
+      </div>
+    </div>
+    
+    <div id="adm-tab-reset" class="adm-tab-content hidden" style="padding:16px">
+      <div class="adst" style="color:#ff6b6b;margin-bottom:8px">⚠ RESET COMPLETO</div>
+      <div class="adss" style="margin-bottom:16px">Cancella tutte le partite, i codici assegnati e azzera i contatori.</div>
+      <div style="padding:14px;background:rgba(255,107,107,.06);border:1px solid rgba(255,107,107,.2);font-size:13px;color:#aaa;margin-bottom:16px;line-height:1.7">❌ Questa operazione è <strong style="color:var(--w)">irreversibile</strong>.</div>
+      <button id="reset-btn" class="adbb" style="background:#8b1a1a;width:100%" onclick="confirmReset()">🗑 RESET COMPLETO DATI</button>
+      <div class="adsv" id="reset-msg"></div>
+    </div>
+  </div>
+
+</div>
+
+<!-- MODAL CONFIRM DELIVERY -->
+<div class="mb hidden" id="cmodal">
+  <div class="mbx">
+    <div class="mbt">CONFERMA</div>
+    <div class="mbb" id="mbody"></div>
+    <div class="mba">
+      <button class="mbc" onclick="closeModal()">Annulla</button>
+      <button class="mbcf" onclick="confirmDel()">CONFERMA</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── STATE ─────────────────────────────────────────────────────────────────
+let PWD={staff:'staff',admin:'admin'};
+let cUser=null,cAsgn=null,allAsgn=[],cFlt='all',cSrch='',pendId=null;
+// Initialize cUser immediately so showWelcome doesn't crash before db-ready
+function _initCUserEarly(){
+  if(!cUser){
+    cUser = {token:uToken, customerId:uCustomerId, name:uName, email:uEmail, fingerprint:'pending', ref:uRef};
+  }
+}
+let scanStream=null,scanActive=false,rtUnsub=null,admPrizes=[];
+let testModeReplay=false;  // bypasses already-played block
+let testModeDate=false;    // bypasses date check
+let selectedTestDay=-1;    // -1 = not selected, 0-3 = day index for simulation
+
+// Base URL for QR codes — update this with your Shopify page URL
+// URL base per QR codes - punta al gioco che fa da tracker
+const QR_BASE_URL = 'https://riminiwellness26.evorafitness.it/';
+// URL form Shopify (usato internamente per redirect)
+const SHOPIFY_FORM_URL = 'https://evorafitness.it/pages/fiera-rimini-wellness-2026';
+
+const params=new URLSearchParams(window.location.search);
+const uName=params.get('name')||params.get('first_name')||'Ospite';
+const uEmail=params.get('email')||'';
+const uRef=params.get('ref')||''; // QR tracking source
+
+// QR Mode gestito in <head> con script normale
+
+// Shopify customer_id è il token primario (da link email Flow)
+// Fallback: token device legacy (per test / accesso diretto)
+const uCustomerId=params.get('customer_id')||'';
+const uToken=uCustomerId || params.get('token') || `demo_${Date.now()}`;
+
+window._uRef=uRef;
+
+_initCUserEarly();
+
+// ── REGULATION STATE ──────────────────────────────────────────────────────
+const DEFAULT_DATES=['2026-05-28','2026-05-29','2026-05-30','2026-05-31'];
+let regDays=DEFAULT_DATES.map(date=>({date,dist:[]}));
+let regSequences=[[],[],[],[]];
+let regLocked=false;
+let saveTimer=null;
+
+
+// ── DEVICE FINGERPRINT ────────────────────────────────────────────────────
+function generateFingerprint(){
+  // Try stored fingerprint first (persists across sessions)
+  try{
+    const stored=localStorage.getItem('evora_fp');
+    if(stored) return stored;
+  }catch(e){}
+  // Build from stable browser characteristics
+  const fp=[
+    navigator.language||'',
+    navigator.platform||'',
+    screen.width+'x'+screen.height,
+    screen.colorDepth||'',
+    new Date().getTimezoneOffset(),
+    navigator.hardwareConcurrency||'',
+    navigator.maxTouchPoints||'0',
+    navigator.vendor||''
+  ].join('|');
+  let hash=0;
+  for(let i=0;i<fp.length;i++){hash=((hash<<5)-hash)+fp.charCodeAt(i);hash|=0;}
+  const result='fp_'+Math.abs(hash).toString(36);
+  try{localStorage.setItem('evora_fp',result);}catch(e){}
+  return result;
+}
+
+// ── BOOT ──────────────────────────────────────────────────────────────────
+// Track QR scan: save when ref is present AND customer_id present
+window.addEventListener('db-ready', async()=>{
+  if(window._uRef && (params.get('customer_id')||params.get('token'))){
+    try{ await window.DB.saveScan(window._uRef); }catch(e){}
+  }
+});
+window.addEventListener('db-ready',async()=>{
+  const uFingerprint=generateFingerprint();
+  // Ref viene dall'URL o rimane vuoto (non serve per gioco, solo per analytics QR)
+  cUser={token:uToken,customerId:uCustomerId,name:uName,email:uEmail,fingerprint:uFingerprint,ref:uRef};
+  
+  // ─── FAST PATH: solo le 2 cose minime per giocare ────────────────────
+  // password + testMode (necessari per check già giocato)
+  try{
+    const [p,tm]=await Promise.all([
+      window.DB.getConfig('passwords'),
+      window.DB.getConfig('testMode')
+    ]);
+    if(p)PWD=p;
+    if(tm&&typeof tm==='object'){testModeReplay=!!tm.replay;testModeDate=!!tm.date;if(typeof tm.day==='number')selectedTestDay=tm.day;}
+  }catch(e){}
+  applyTestModeBanner();
+  
+  // ─── SEGNALA SUBITO READY: l'utente può giocare ──────────────────────
+  window._firebaseReady = true;
+  if(window._loaderBarDone) showApp();
+  
+  // ─── BACKGROUND LOAD: dati che servono solo per admin/regolamento ────
+  // Non bloccano l'utente che vuole giocare
+  (async()=>{
+    try{
+      const [reg,seqLoads,regHtml,prizes]=await Promise.all([
+        window.DB.getConfig('regulation'),
+        Promise.all([0,1,2,3].map(i=>window.DB.getConfig_seq(i))),
+        window.DB.getConfig('regulation_html'),
+        window.DB.getPrizes()
+      ]);
+      if(reg){
+        if(reg.regDays&&Array.isArray(reg.regDays)&&reg.regDays.length>0){
+          regDays=reg.regDays;
+        }else if(!Array.isArray(regDays)){
+          regDays=DEFAULT_DATES.map(date=>({date,dist:[]}));
+        }
+        if(reg.regLocked) regLocked=reg.regLocked;
+        if(reg.admPrizes) admPrizes=reg.admPrizes;
+        if(reg.company) savedRegData.company=reg.company;
+        if(reg.event) savedRegData.event=reg.event;
+        if(reg.event?.name) savedRegData.event.name=reg.event.name;
+        if(reg.admPrizes) savedRegData.admPrizes=reg.admPrizes;
+      }
+      const anyLoaded=seqLoads.some(s=>s&&s.length>0);
+      if(anyLoaded) regSequences=seqLoads.map(s=>s||[]);
+      savedRegData.regSequences=regSequences;
+      if(regHtml) savedRegData.regulationHtml=regHtml;
+      if(!admPrizes.length&&prizes.length){ admPrizes=prizes; savedRegData.admPrizes=prizes; }
+      buildRegulationModalText();
+      console.log('[EVORA] Background data loaded');
+    }catch(e){console.log('[EVORA] Background load error:',e);}
+  })();
+});
+
+// Start loader bar animation immediately when page loads — independent of Firebase
+window._firebaseReady = false;
+window._loaderBarDone = false;
+
+// SAFETY: if Firebase doesn't respond in 15s, show app anyway with error
+setTimeout(()=>{
+  if(!window._firebaseReady){
+    console.error('[EVORA] Firebase timeout — showing app anyway');
+    window._firebaseReady = true;
+    if(window._loaderBarDone) showApp();
+  }
+}, 15000);
+
+// Catch any unhandled errors that might block init
+window.addEventListener('error', e=>{
+  console.error('[EVORA] Error:', e.message, 'at', e.filename+':'+e.lineno);
+});
+window.addEventListener('unhandledrejection', e=>{
+  console.error('[EVORA] Promise rejection:', e.reason);
+});
+// Start loader bar IMMEDIATELY (not waiting for DOMContentLoaded)
+(function startLoaderBar(){
+  // Wait for loader-bar element if DOM not ready yet
+  function tryStart(){
+    const loaderBar = document.getElementById('loader-bar');
+    if(!loaderBar){
+      // DOM not ready, try again in 50ms
+      setTimeout(tryStart, 50);
+      return;
+    }
+    console.log('[EVORA] Loader bar starting');
+    let pct = 0;
+    const iv = setInterval(()=>{
+      if(window._firebaseReady){
+        // Firebase pronto: vai veloce a 100
+        pct += Math.random() * 25 + 15;
+      } else if(pct < 70){
+        // Firebase non pronto: avanza fino a 70 e aspetta
+        pct += Math.random() * 8 + 3;
+        if(pct > 70) pct = 70;
+      } else {
+        // pct >= 70 ma firebase non pronto: avanza piano
+        pct += 0.5;
+        if(pct > 95) pct = 95; // non superare 95 senza firebase ready
+      }
+      
+      // Check completamento (vale per qualsiasi ramo)
+      if(pct >= 100){
+        pct = 100;
+        loaderBar.style.width = '100%';
+        clearInterval(iv);
+        window._loaderBarDone = true;
+        console.log('[EVORA] Loader done, calling showApp');
+        showApp();
+        return;
+      }
+      
+      loaderBar.style.width = Math.min(pct, 100) + '%';
+    }, 60);
+  }
+  tryStart();
+})();
+
+let _appShown = false;
+function showApp(){
+  if(_appShown) return;
+  _appShown = true;
+  const loader = document.getElementById('loader');
+  if(!loader) return;
+  loader.style.opacity = '0';
+  setTimeout(()=>{
+    loader.style.display = 'none';
+    document.getElementById('app').style.display = 'flex';
+    try{
+      const h = window.location.hash;
+      const myqrParam = new URLSearchParams(window.location.search).get('myqr');
+      if(h==='#staff') showLoginStaff();
+      else if(h==='#admin') showLoginAdmin();
+      else if(h==='#myqr' && myqrParam){
+        // Arrivato qui con nome già verificato dall'overlay
+        const src = {id: myqrParam, name: myqrParam};
+        showMyQRView(src);
+      }
+      else if(h==='#myqr') showLoginMyQR();
+      else showWelcome();
+    }catch(err){
+      console.error('[EVORA] showApp error:', err);
+    }
+  }, 400);
+}
+
+
+
+// ── PAGE NAV ──────────────────────────────────────────────────────────────
+// ── SMOOTH PAGE TRANSITIONS ──────────────────────────────────────────────
+function transitionTo(showId){
+  const pages=['pg-welcome','pg-game','pg-result','pg-ty','pg-login-staff','pg-login-admin','pg-myqr-login','pg-myqr-view','pg-ranking','pg-staff','pg-admin'];
+  const curEl=pages.map(id=>document.getElementById(id)).find(el=>el&&!el.classList.contains('hidden')&&el.style.display!=='none'&&el.style.display!=='');
+  const nextEl=document.getElementById(showId);
+  if(!nextEl)return;
+  if(curEl&&curEl!==nextEl){
+    curEl.classList.add('page-out');
+    setTimeout(()=>{
+      curEl.classList.remove('page-out');
+      pages.forEach(id=>{const e=document.getElementById(id);if(e){e.classList.add('hidden');e.style.display='';}});
+      nextEl.classList.remove('hidden');
+      nextEl.style.display='block';
+      nextEl.classList.add('page-in');
+      setTimeout(()=>nextEl.classList.remove('page-in'),500);
+      window.scrollTo(0,0);
+    },280);
+  } else {
+    pages.forEach(id=>{const e=document.getElementById(id);if(e){e.classList.add('hidden');e.style.display='';}});
+    nextEl.classList.remove('hidden');
+    nextEl.style.display='block';
+    window.scrollTo(0,0);
+  }
+}
+
+function hideAll(){
+  ['pg-welcome','pg-game','pg-result','pg-ty','pg-login-staff','pg-login-admin','pg-myqr-login','pg-myqr-view','pg-ranking','pg-staff','pg-admin'].forEach(id=>{
+    const e=document.getElementById(id);
+    e.classList.add('hidden');e.style.display='';
+  });
+}
+function show(id,flex=false){const e=document.getElementById(id);e.classList.remove('hidden');if(flex)e.style.display='flex';}
+function showFooter(){} // footer rimosso in v24
+function hideFooter(){} // footer rimosso in v24
+
+function showWelcome(){
+  transitionTo('pg-welcome');stopCamera();
+  if(rtUnsub){rtUnsub();rtUnsub=null;}
+  const unameEl = document.getElementById('uname');
+  if(unameEl) unameEl.textContent = (cUser && cUser.name) || 'Ospite';
+  show('pg-welcome');showFooter();
+}
+function goHome(){showWelcome();}
+function showLoginStaff(){hideAll();const e=document.getElementById('pg-login-staff');e.classList.remove('hidden');e.style.display='flex';document.getElementById('spwd').value='';document.getElementById('serr').textContent='';showFooter();}
+function showLoginAdmin(){hideAll();const e=document.getElementById('pg-login-admin');e.classList.remove('hidden');e.style.display='flex';document.getElementById('apwd').value='';document.getElementById('aerr').textContent='';showFooter();}
+function chkStaff(){if(document.getElementById('spwd').value===PWD.staff)showStaff();else document.getElementById('serr').textContent='Password errata';}
+function chkAdmin(){if(document.getElementById('apwd').value===PWD.admin)showAdminPage();else document.getElementById('aerr').textContent='Password errata';}
+
+// ── MIO QR (per influencer/staff personale) ─────────────────────────────
+function showLoginMyQR(){
+  hideAll();
+  const e=document.getElementById('pg-myqr-login');
+  e.classList.remove('hidden');
+  e.style.display='flex';
+  document.getElementById('myqr-pwd').value='';
+  document.getElementById('myqr-err').textContent='';
+  showFooter();
+}
+
+async function chkMyQR(){
+  const input=document.getElementById('myqr-pwd').value.trim();
+  const errEl=document.getElementById('myqr-err');
+  if(!input){ errEl.textContent='Inserisci il tuo nome'; return; }
+  
+  errEl.textContent='Caricamento…';
+  try{
+    // Carica lista QR dal Firestore
+    const sources=await window.DB.getConfig('qr_sources');
+    if(!sources || !sources.length){
+      errEl.textContent='Nessun QR configurato';
+      return;
+    }
+    
+    // Cerca corrispondenza case-insensitive (così Marco / marco / MARCO funzionano tutti)
+    const normalized=input.toLowerCase();
+    const match=sources.find(s=>(s.id||'').toLowerCase()===normalized || (s.name||'').toLowerCase()===normalized);
+    
+    if(!match){
+      errEl.textContent='Nome non trovato';
+      return;
+    }
+    
+    // Trovato → mostra QR
+    showMyQRView(match);
+    errEl.textContent='';
+  }catch(e){
+    console.error('[MyQR]',e);
+    errEl.textContent='Errore di connessione';
+  }
+}
+
+// ── RANKING ─────────────────────────────────────────────────────────────────
+
+// Chiave localStorage per countdown globale
+const RANKING_LS_KEY = 'evora_ranking_cache';
+const RANKING_COOLDOWN_MS = 60 * 1000; // 1 minuto
+
+let _rankingTimer = null;
+
+function showRanking(){
+  hideAll();
+  // Mostra pannello debug se URL ha ?debug
+  setTimeout(()=>{
+    const dbgEl = document.getElementById('ranking-debug');
+    if(dbgEl && window.location.search.includes('debug')) dbgEl.style.display='block';
+  },100);
+  const e = document.getElementById('pg-ranking');
+  e.classList.remove('hidden');
+  e.style.display = 'flex';
+  
+  // Controlla cache localStorage
+  const cached = getRankingCache();
+  if(cached){
+    renderRankingList(cached.data);
+    startRankingCountdown(cached.nextUpdate);
+  } else {
+    // Prima apertura — mostra pulsante attivo, aspetta click utente
+    document.getElementById('ranking-list').innerHTML = '<div style="color:#666;text-align:center;padding:40px;font-size:14px">Clicca AGGIORNA per vedere la classifica</div>';
+    document.getElementById('ranking-status').textContent = '';
+    document.getElementById('ranking-countdown').textContent = '';
+    // Pulsante abilitato subito
+    const btn = document.getElementById('ranking-refresh-btn');
+    if(btn){ btn.disabled = false; btn.textContent = '🔄 AGGIORNA'; btn.style.opacity = '1'; }
+  }
+}
+
+function getRankingCache(){
+  try{
+    const raw = localStorage.getItem(RANKING_LS_KEY);
+    if(!raw) return null;
+    const parsed = JSON.parse(raw);
+    if(!parsed.nextUpdate) return null;
+    // Cache valida se nextUpdate è nel futuro
+    if(Date.now() < parsed.nextUpdate) return parsed;
+    return null; // scaduta
+  }catch(e){ return null; }
+}
+
+function setRankingCache(data){
+  try{
+    const nextUpdate = Date.now() + RANKING_COOLDOWN_MS;
+    localStorage.setItem(RANKING_LS_KEY, JSON.stringify({data, nextUpdate, updatedAt: new Date().toISOString()}));
+    return nextUpdate;
+  }catch(e){ return Date.now() + RANKING_COOLDOWN_MS; }
+}
+
+async function refreshRanking(){
+  const btn = document.getElementById('ranking-refresh-btn');
+  const status = document.getElementById('ranking-status');
+  
+  // Controlla cooldown
+  const cached = getRankingCache();
+  if(cached){
+    // Ancora in cooldown
+    renderRankingList(cached.data);
+    startRankingCountdown(cached.nextUpdate);
+    return;
+  }
+  
+  // Fetch da Firebase
+  btn.disabled = true;
+  btn.textContent = '⏳ Aggiornamento...';
+  status.textContent = '';
+  
+  // Pannello debug visivo (visibile su mobile senza DevTools)
+  const debugEl = document.getElementById('ranking-debug');
+  function dbg(msg){ if(debugEl) debugEl.innerHTML += '<div>' + msg + '</div>'; console.log(msg); }
+  if(debugEl) debugEl.innerHTML = '';
+  
+  try{
+    dbg('DB: ' + (window.DB ? 'OK' : 'MANCANTE'));
+    dbg('getDoc_: ' + (window.DB?.getDoc_ ? 'OK' : 'MANCANTE'));
+    
+    if(!window.DB || !window.DB.getDoc_){
+      throw new Error('Firebase DB non ancora pronto');
+    }
+    
+    // Legge leaderboard (punteggi) e lista QR (tutti gli influencer)
+    const [lb, sources] = await Promise.all([
+      window.DB.getDoc_('config','leaderboard'),
+      window.DB.getConfig('qr_sources')
+    ]);
+    
+    dbg('LB: ' + JSON.stringify(lb));
+    dbg('Sources: ' + JSON.stringify(sources));
+    
+    const scores = lb || {};
+    
+    // Costruisce oggetto con TUTTI gli influencer (anche chi ha 0 giocate)
+    const data = {};
+    if(sources && sources.length){
+      sources.forEach(src => {
+        const key = src.id || src.name || '';
+        if(key) data[key] = scores[key] || 0;
+      });
+    }
+    // Aggiunge anche chi ha giocate ma non è nella lista QR (fallback)
+    Object.entries(scores).forEach(([k,v]) => {
+      if(!(k in data) && k !== 'savedAt') data[k] = v;
+    });
+    
+    dbg('Final: ' + JSON.stringify(data));
+    
+    // Salva in cache
+    const nextUpdate = setRankingCache(data);
+    
+    // Mostra
+    renderRankingList(data);
+    startRankingCountdown(nextUpdate);
+    
+    const now = new Date();
+    status.textContent = 'Aggiornato alle ' + now.getHours().toString().padStart(2,'0') + ':' + now.getMinutes().toString().padStart(2,'0');
+    
+  }catch(e){
+    console.error('[Ranking] Error:', e);
+    status.textContent = 'Errore: ' + e.message;
+    btn.disabled = false;
+    btn.textContent = '🔄 AGGIORNA';
+  }
+}
+
+function renderRankingList(data){
+  const el = document.getElementById('ranking-list');
+  if(!el) return;
+  
+  // Ordina per valore decrescente
+  const entries = Object.entries(data)
+    .filter(([k]) => k !== 'lastUpdated')
+    .sort((a,b) => b[1] - a[1]);
+  
+  if(entries.length === 0){
+    el.innerHTML = '<div style="color:#666;text-align:center;padding:40px;font-size:14px">Nessuna giocata ancora</div>';
+    return;
+  }
+  
+  const medals = ['🥇','🥈','🥉'];
+  
+  el.innerHTML = entries.map(([name, count], i) => {
+    const medal = medals[i] || '';
+    const pos = i + 1;
+    const isTop = i < 3;
+    return '<div style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px;margin-bottom:8px;background:' + (isTop ? 'rgba(178,34,34,.08)' : '#0f0f0f') + ';border:1px solid ' + (isTop ? '#B22222' : '#1a1a1a') + ';border-radius:4px">'
+      + '<div style="display:flex;align-items:center;gap:12px">'
+      + '<span style="font-family:var(--fd);font-size:13px;color:#555;min-width:20px">' + (medal || pos + '.') + '</span>'
+      + '<span style="font-family:var(--fd);font-size:16px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:#f0ede8">' + name + '</span>'
+      + '</div>'
+      + '<span style="font-family:var(--fd);font-size:22px;font-weight:800;color:' + (isTop ? '#B22222' : '#f0ede8') + '">' + count + '</span>'
+      + '</div>';
+  }).join('');
+}
+
+function startRankingCountdown(nextUpdate){
+  const btn = document.getElementById('ranking-refresh-btn');
+  const countdown = document.getElementById('ranking-countdown');
+  
+  // Ferma timer precedente
+  if(_rankingTimer) clearInterval(_rankingTimer);
+  
+  function tick(){
+    const remaining = nextUpdate - Date.now();
+    if(remaining <= 0){
+      // Countdown finito
+      clearInterval(_rankingTimer);
+      _rankingTimer = null;
+      if(btn){ btn.disabled = false; btn.textContent = '🔄 AGGIORNA'; btn.style.opacity = '1'; }
+      if(countdown){ countdown.textContent = ''; }
+      return;
+    }
+    const secs = Math.ceil(remaining / 1000);
+    const mins = Math.floor(secs / 60);
+    const s = secs % 60;
+    if(btn){ btn.disabled = true; btn.textContent = '🔄 AGGIORNA'; btn.style.opacity = '0.4'; }
+    if(countdown){
+      countdown.textContent = 'Prossimo aggiornamento disponibile tra ' + (mins > 0 ? mins + ':' + s.toString().padStart(2,'0') : s + 's');
+    }
+  }
+  
+  tick();
+  _rankingTimer = setInterval(tick, 1000);
+}
+
+// ── MIO QR ──────────────────────────────────────────────────────────────────
+function goToIGGate(){
+  // Torna alla pagina Instagram gate
+  // Usa il ref salvato in _myQRSrc, oppure quello nell'URL, oppure uno generico
+  const src = window._myQRSrc;
+  const ref = (src && src.id) 
+    ? src.id 
+    : (window._lastKnownRef || 'staff');
+  // Forza il gate Instagram passando ?ref= senza hash
+  window.location.replace(window.location.origin + window.location.pathname + '?ref=' + encodeURIComponent(ref));
+}
+
+function showMyQRView(src){
+  window._myQRSrc = src; // salva per ritorno dalla classifica
+  hideAll();
+  const e=document.getElementById('pg-myqr-view');
+  e.classList.remove('hidden');
+  e.style.display='flex';
+  
+  // URL del QR (uguale a quello generato nell'admin)
+  const url=QR_BASE_URL+'?ref='+encodeURIComponent(src.id);
+  
+  document.getElementById('myqr-name').textContent=src.name||src.id;
+  
+  // Genera QR image
+  const qrContainer=document.getElementById('myqr-image');
+  qrContainer.innerHTML='';
+  try{
+    // Dimensione = quasi tutta la larghezza schermo
+    const qrSize = Math.min(window.innerWidth - 48, 480);
+    new QRCode(qrContainer,{
+      text:url,
+      width:qrSize,
+      height:qrSize,
+      colorDark:'#000000',
+      colorLight:'#ffffff',
+      correctLevel:QRCode.CorrectLevel.M
+    });
+    // Forza il canvas/img generato da QRCode a riempire il container
+    setTimeout(()=>{
+      const img = qrContainer.querySelector('img');
+      const canvas = qrContainer.querySelector('canvas');
+      if(img){ img.style.width='100%'; img.style.height='auto'; img.style.display='block'; }
+      if(canvas){ canvas.style.width='100%'; canvas.style.height='auto'; canvas.style.display='block'; }
+    }, 50);
+  }catch(err){
+    console.error('[QR]',err);
+    qrContainer.innerHTML='<div style="color:#f66;padding:20px;text-align:center">Errore generazione QR</div>';
+  }
+  
+  showFooter();
+}
+function logoutStaff(){stopCamera();showWelcome();}
+function logoutAdmin(){showWelcome();}
+
+// ── REGULATION MODAL ──────────────────────────────────────────────────────
+
+function openPrivacyModal(){
+  // Reindirizza al regolamento completo che è già nel popup
+  openRegModal();
+}
+
+document.addEventListener('keydown',e=>{if(e.key==='Escape')closeRegModal();});
+
+// savedRegData populated at boot from Firebase - used on user-facing pages
+let savedRegData={company:{name:'Evora',city:'',vat:''},event:{name:'Evora Fiera 2026',venue:'evento fieristico'}};
+
+// Format YYYY-MM-DD → "28 maggio 2026"
+function fmtDate(d){
+  if(!d)return'';
+  const months=['','gennaio','febbraio','marzo','aprile','maggio','giugno','luglio','agosto','settembre','ottobre','novembre','dicembre'];
+  const p=d.split('-');
+  return`${parseInt(p[2])} ${months[parseInt(p[1])]} ${p[0]}`;
+}
+
+// Build regulation modal content with full sequences, day tabs
+function buildRegulationModalText(){ /* rimossa in v24 - regolamento è popup statico */ }
+
+function toggleSeqDetail(i){
+  const panel=document.getElementById(`seq-detail-${i}`);
+  const btn=document.getElementById(`seq-toggle-${i}`);
+  if(!panel) return;
+  const isHidden=panel.classList.contains('hidden');
+  panel.classList.toggle('hidden',!isHidden);
+  if(btn) btn.textContent=(isHidden?'▼':'▶')+btn.textContent.slice(1);
+}
+
+function switchRegDay(idx,btn){
+  document.querySelectorAll('.reg-day-tab').forEach(b=>b.classList.remove('active'));
+  document.querySelectorAll('.reg-day-seq').forEach(p=>p.classList.remove('active'));
+  btn.classList.add('active');
+  const panel=document.getElementById(`reg-seq-panel-${idx}`);
+  if(panel) panel.classList.add('active');
+}
+
+// ── GAME ──────────────────────────────────────────────────────────────────
+
+// Returns today's date as YYYY-MM-DD in local time
+function todayStr(){
+  const d=new Date();
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+
+// Check if today is one of the configured fair dates
+function isValidFairDay(){
+  const today=todayStr();
+  const validDates=regDays.map(d=>d.date).filter(Boolean);
+  // No dates configured yet → allow (admin hasn't set up, or testing)
+  if(!validDates.length) return true;
+  // If all dates are the default placeholder dates AND none match today,
+  // check if they are truly custom dates or just defaults never changed
+  return validDates.includes(today);
+}
+
+// Returns the configured fair dates formatted nicely
+function fairDatesLabel(){
+  const dates=regDays.map(d=>d.date).filter(Boolean);
+  if(!dates.length) return '28–31 maggio 2026';
+  return dates.map(d=>{
+    const parts=d.split('-');
+    const months=['','gennaio','febbraio','marzo','aprile','maggio','giugno','luglio','agosto','settembre','ottobre','novembre','dicembre'];
+    return `${parseInt(parts[2])} ${months[parseInt(parts[1])]}`;
+  }).join(', ');
+}
+
+async function doShowGame(){
+  // ── FETCH FRESH CONFIG FROM FIREBASE ─────────────────────────────────────
+  // Re-read testMode so game always uses latest admin settings (including selected day)
+  try{
+    const tm=await window.DB.getConfig('testMode');
+    if(tm&&typeof tm==='object'){
+      testModeReplay=!!tm.replay;
+      testModeDate=!!tm.date;
+      if(typeof tm.day==='number') selectedTestDay=tm.day;
+    }
+  }catch(e){}
+
+  // ── DATE CHECK DISABLED — gioco sempre attivo, sequenza guida l'avanzamento ──
+  const dateOk = true;
+  if(!dateOk){
+    let fairDates=[]; const today=todayStr();
+    const months=['','gennaio','febbraio','marzo','aprile','maggio','giugno','luglio','agosto','settembre','ottobre','novembre','dicembre'];
+    const label=fairDates.map(d=>{
+      const p=d.split('-');
+      return `${parseInt(p[2])} ${months[parseInt(p[1])]} ${p[0]}`;
+    }).join(', ');
+
+    hideAll();showFooter();
+    const pg=document.getElementById('pg-welcome');
+    pg.classList.remove('hidden');
+    pg.innerHTML=`
+      <div style="text-align:center;padding:20px 0;width:100%;max-width:420px;animation:fu .5s cubic-bezier(.16,1,.3,1) both">
+        <div style="display:flex;justify-content:center;width:100%;margin-bottom:48px"><img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA1OTUuMjggMjgyLjYyIj48cGF0aCBmaWxsPSIjZjBlZGU4IiBkPSJNMzEuNDgsOTQuMjFoNzEuMDV2MTguNDRINTIuMDd2MTkuMTFoNDQuNHYxOC40M0g1Mi4wN1YxNzBIMTAzLjJ2MTguNDRIMzEuNDhaIi8+PHBhdGggZmlsbD0iI2YwZWRlOCIgZD0iTTEyNi4yNiw5My44OGgyMi44N2wyNC42Myw2Ni4zNCwyNC42My02Ni4zNGgyMi4zM2wtMzguMDgsOTQuODdoLTE4LjNaIi8+PHBhdGggZmlsbD0iI2YwZWRlOCIgZD0iTTI0MCwxNDEuNTh2LS4yN2MwLTI2Ljc4LDIxLjEzLTQ4LjcxLDUwLjItNDguNzFzNDkuOTIsMjEuNjYsNDkuOTIsNDguNDR2LjI3QzM0MC4xNiwxNjguMDksMzE5LDE5MCwyOTAsMTkwUzI0MCwxNjguMzYsMjQwLDE0MS41OFptNzguNDYsMHYtLjI3YzAtMTYuMTUtMTEuODUtMjkuNi0yOC41My0yOS42UzI2MS43MSwxMjQuOSwyNjEuNzEsMTQxdi4yN2MwLDE2LjE1LDExLjg0LDI5LjYxLDI4LjUzLDI5LjYxUzMxOC41LDE1Ny43MywzMTguNSwxNDEuNThaIi8+PHBhdGggZmlsbD0iI2YwZWRlOCIgZD0iTTM2Nyw5NC4yMUg0MTBjMTIsMCwyMS4xMiwzLjIzLDI3LjQ1LDkuNTYsNS4zOCw1LjM4LDguMDcsMTIuNTEsOC4wNywyMS41M3YuMjdjMCwxNS4yLTguMjEsMjQuNzYtMjAuMTksMjkuMmwyMywzMy42NEg0MjQuMTRMNDA0LDE1OC4yN0gzODcuNjh2MzAuMTRIMzY3Wk00MDguNjcsMTQwYzEwLjIzLDAsMTUuODgtNS4yNSwxNS44OC0xMy4zM3YtLjI2YzAtOS02LjA2LTEzLjQ2LTE2LjI4LTEzLjQ2SDM4Ny42OFYxNDBaIi8+PHBhdGggZmlsbD0iI2YwZWRlOCIgZD0iTTUxMy44NywxMTguMWwtMjguOCw3MC42NUg0NjRsNDAuMzctOTQuODdoMTkuMWw0MC4zNyw5NC44N0g1NDIuMTNMNTEzLjg3LDExOC4xIi8+PC9zdmc+" alt="Evora" style="width:30vw;max-width:180px;height:auto;display:block"/></div>
+        <div style="font-size:52px;margin-bottom:20px">🗓</div>
+        <div style="font-family:var(--fd);font-size:48px;font-weight:800;letter-spacing:2px;line-height:.95;text-transform:uppercase;margin-bottom:16px">
+          CONCORSO<br><em style="color:var(--red);font-style:normal">NON ATTIVO</em>
+        </div>
+        <div style="background:var(--s);border:1px solid var(--b);padding:24px;margin-bottom:28px;position:relative">
+          <div style="position:absolute;top:0;left:0;right:0;height:2px;background:var(--red)"></div>
+          <div style="font-family:var(--fd);font-size:11px;letter-spacing:4px;color:var(--g);text-transform:uppercase;margin-bottom:10px">Date del concorso</div>
+          <div style="font-size:15px;color:var(--w);font-weight:600;margin-bottom:8px">${label}</div>
+          <div style="font-size:13px;color:#aaa;line-height:1.7">Il gioco è disponibile solo durante i giorni della fiera. Passa allo stand Evora nelle date indicate!</div>
+        </div>
+        <div style="font-family:var(--fd);font-size:10px;letter-spacing:3px;color:#444;text-transform:uppercase">© Evora Fitness</div>
+      </div>`;
+    return;
+  }
+
+  // ── CHECK IF ALREADY PLAYED (skip if replay test mode on) ────────────────
+  if(!testModeReplay){
+    const prev=await window.DB.checkAlreadyPlayed(cUser.customerId||cUser.token, cUser.email, cUser.fingerprint);
+    if(prev){
+      cAsgn=prev;
+      showAlreadyPlayed();
+      return;
+    }
+  }
+
+  // ── NORMAL FLOW ───────────────────────────────────────────────────────────
+  hideAll(); show('pg-game'); showFooter();
+  try{
+    const dayOverride=testModeDate&&selectedTestDay>=0?selectedTestDay:-1;
+    cAsgn=await window.DB.assignPrize(cUser.token,cUser.name,cUser.email,testModeReplay,dayOverride,cUser.ref||"",cUser.customerId||"",cUser.fingerprint||"");
+    if(!cAsgn){showPrizesEnded();return;}
+    // Fingerprint pointer saved inside assignPrize via savePointers()
+  }catch(e){alert('Errore di connessione. Riprova.');showWelcome();return;}
+  document.getElementById('tnum').textContent='#'+cAsgn.id.slice(-6).toUpperCase();
+  document.getElementById('tser').textContent=`EVR · 2026 · ${cAsgn.code}`;
+  document.getElementById('pe').textContent=cAsgn.prizeEmoji;
+  document.getElementById('pn').textContent=cAsgn.prizeName;
+  document.getElementById('pd').textContent=cAsgn.prizeDesc;
+  initScratch();
+  const listenKey=cUser.email?'email_'+cUser.email.toLowerCase().replace(/[^a-z0-9]/g,'_'):cUser.token;
+  rtUnsub=window.DB.listenAssignment(listenKey,d=>{if(d.status==='delivered')showTY();});
+}
+
+// ── PRIZES ENDED SCREEN ─────────────────────────────────────────────────
+function showPrizesEnded(){
+  hideAll();showFooter();
+  const pg=document.getElementById('pg-welcome');
+  pg.classList.remove('hidden');
+  pg.innerHTML=`
+    <div style="text-align:center;width:100%;max-width:420px;animation:fu .5s cubic-bezier(.16,1,.3,1) both">
+      <div style="display:flex;justify-content:center;width:100%;margin-bottom:40px"><img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA1OTUuMjggMjgyLjYyIj48cGF0aCBmaWxsPSIjZjBlZGU4IiBkPSJNMzEuNDgsOTQuMjFoNzEuMDV2MTguNDRINTIuMDd2MTkuMTFoNDQuNHYxOC40M0g1Mi4wN1YxNzBIMTAzLjJ2MTguNDRIMzEuNDhaIi8+PHBhdGggZmlsbD0iI2YwZWRlOCIgZD0iTTEyNi4yNiw5My44OGgyMi44N2wyNC42Myw2Ni4zNCwyNC42My02Ni4zNGgyMi4zM2wtMzguMDgsOTQuODdoLTE4LjNaIi8+PHBhdGggZmlsbD0iI2YwZWRlOCIgZD0iTTI0MCwxNDEuNTh2LS4yN2MwLTI2Ljc4LDIxLjEzLTQ4LjcxLDUwLjItNDguNzFzNDkuOTIsMjEuNjYsNDkuOTIsNDguNDR2LjI3QzM0MC4xNiwxNjguMDksMzE5LDE5MCwyOTAsMTkwUzI0MCwxNjguMzYsMjQwLDE0MS41OFptNzguNDYsMHYtLjI3YzAtMTYuMTUtMTEuODUtMjkuNi0yOC41My0yOS42UzI2MS43MSwxMjQuOSwyNjEuNzEsMTQxdi4yN2MwLDE2LjE1LDExLjg0LDI5LjYxLDI4LjUzLDI5LjYxUzMxOC41LDE1Ny43MywzMTguNSwxNDEuNThaIi8+PHBhdGggZmlsbD0iI2YwZWRlOCIgZD0iTTM2Nyw5NC4yMUg0MTBjMTIsMCwyMS4xMiwzLjIzLDI3LjQ1LDkuNTYsNS4zOCw1LjM4LDguMDcsMTIuNTEsOC4wNywyMS41M3YuMjdjMCwxNS4yLTguMjEsMjQuNzYtMjAuMTksMjkuMmwyMywzMy42NEg0MjQuMTRMNDA0LDE1OC4yN0gzODcuNjh2MzAuMTRIMzY3Wk00MDguNjcsMTQwYzEwLjIzLDAsMTUuODgtNS4yNSwxNS44OC0xMy4zM3YtLjI2YzAtOS02LjA2LTEzLjQ2LTE2LjI4LTEzLjQ2SDM4Ny42OFYxNDBaIi8+PHBhdGggZmlsbD0iI2YwZWRlOCIgZD0iTTUxMy44NywxMTguMWwtMjguOCw3MC42NUg0NjRsNDAuMzctOTQuODdoMTkuMWw0MC4zNyw5NC44N0g1NDIuMTNMNTEzLjg3LDExOC4xIi8+PC9zdmc+" alt="Evora" style="width:30vw;max-width:180px;height:auto;display:block"/></div>
+      <div style="font-size:64px;margin-bottom:16px">🎁</div>
+      <div style="font-family:var(--fd);font-size:48px;font-weight:800;letter-spacing:2px;text-transform:uppercase;line-height:.95;margin-bottom:12px">
+        PREMI<span style="display:block;color:var(--red)">ESAURITI</span>
+      </div>
+      <div style="font-family:var(--fs);font-size:18px;color:var(--g);margin-bottom:28px">Tutti i premi sono stati assegnati</div>
+      <div style="background:var(--s);border:1px solid var(--b);padding:24px;position:relative;margin-bottom:16px">
+        <div style="position:absolute;top:0;left:0;right:0;height:2px;background:var(--red)"></div>
+        <div style="font-size:14px;color:#aaa;line-height:1.7">
+          Grazie per aver partecipato al concorso <strong style="color:var(--w)">Evora Fiera 2026</strong>!<br><br>
+          Passa allo stand per scoprire le novità e le offerte speciali riservate ai visitatori.
+        </div>
+      </div>
+      <div style="font-family:var(--fd);font-size:10px;letter-spacing:3px;color:#444;text-transform:uppercase">© Evora Fitness</div>
+    </div>`;
+}
+
+// ── POPULATE REGULATION PRIZES (dinamico da sequenze) ─────────────────────
+async function populateRegulationPrizes(){
+  try{
+    // Carica main + emergency sequences
+    const [mainSnap, extSnap] = await Promise.all([
+      window.DB.getDoc_("sequences","main"),
+      window.DB.getDoc_("sequences","emergency")
+    ]);
+    const allSeq = [...((mainSnap&&mainSnap.prizes)||[]), ...((extSnap&&extSnap.prizes)||[])];
+    
+    // Estrai nomi unici (rimuovi duplicati)
+    const uniqueNames = [...new Set(allSeq.map(p=>p.name||'Omaggio promozionale'))];
+    
+    // Popola la lista
+    const el = document.getElementById('reg-prize-list');
+    if(el && uniqueNames.length > 0){
+      el.innerHTML = uniqueNames.map(name=>`<li>${name}</li>`).join('');
+    } else if(el){
+      el.innerHTML = '<li>Omaggi promozionali EVORΛ Fitness</li>';
+    }
+  }catch(e){
+    console.log('[Regulation] Errore caricamento premi:',e);
+  }
+}
+
+// ── ALREADY PLAYED SCREEN ─────────────────────────────────────────────────
+function showAlreadyPlayed(){
+  // Se l'utente aveva vinto uno sconto, rimostra la schermata sconto
+  if(cAsgn && cAsgn.isDiscount){
+    showDiscountResult();
+    return;
+  }
+  hideAll();showFooter();
+  const pg=document.getElementById('pg-welcome');
+  pg.classList.remove('hidden');
+  const a=cAsgn;
+
+  // STATUS C — prize already delivered
+  if(a.status==='delivered'){
+    pg.innerHTML=`
+      <div style="text-align:center;width:100%;max-width:420px;animation:fu .5s cubic-bezier(.16,1,.3,1) both">
+        <div style="display:flex;justify-content:center;width:100%;margin-bottom:40px"><img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA1OTUuMjggMjgyLjYyIj48cGF0aCBmaWxsPSIjZjBlZGU4IiBkPSJNMzEuNDgsOTQuMjFoNzEuMDV2MTguNDRINTIuMDd2MTkuMTFoNDQuNHYxOC40M0g1Mi4wN1YxNzBIMTAzLjJ2MTguNDRIMzEuNDhaIi8+PHBhdGggZmlsbD0iI2YwZWRlOCIgZD0iTTEyNi4yNiw5My44OGgyMi44N2wyNC42Myw2Ni4zNCwyNC42My02Ni4zNGgyMi4zM2wtMzguMDgsOTQuODdoLTE4LjNaIi8+PHBhdGggZmlsbD0iI2YwZWRlOCIgZD0iTTI0MCwxNDEuNTh2LS4yN2MwLTI2Ljc4LDIxLjEzLTQ4LjcxLDUwLjItNDguNzFzNDkuOTIsMjEuNjYsNDkuOTIsNDguNDR2LjI3QzM0MC4xNiwxNjguMDksMzE5LDE5MCwyOTAsMTkwUzI0MCwxNjguMzYsMjQwLDE0MS41OFptNzguNDYsMHYtLjI3YzAtMTYuMTUtMTEuODUtMjkuNi0yOC41My0yOS42UzI2MS43MSwxMjQuOSwyNjEuNzEsMTQxdi4yN2MwLDE2LjE1LDExLjg0LDI5LjYxLDI4LjUzLDI5LjYxUzMxOC41LDE1Ny43MywzMTguNSwxNDEuNThaIi8+PHBhdGggZmlsbD0iI2YwZWRlOCIgZD0iTTM2Nyw5NC4yMUg0MTBjMTIsMCwyMS4xMiwzLjIzLDI3LjQ1LDkuNTYsNS4zOCw1LjM4LDguMDcsMTIuNTEsOC4wNywyMS41M3YuMjdjMCwxNS4yLTguMjEsMjQuNzYtMjAuMTksMjkuMmwyMywzMy42NEg0MjQuMTRMNDA0LDE1OC4yN0gzODcuNjh2MzAuMTRIMzY3Wk00MDguNjcsMTQwYzEwLjIzLDAsMTUuODgtNS4yNSwxNS44OC0xMy4zM3YtLjI2YzAtOS02LjA2LTEzLjQ2LTE2LjI4LTEzLjQ2SDM4Ny42OFYxNDBaIi8+PHBhdGggZmlsbD0iI2YwZWRlOCIgZD0iTTUxMy44NywxMTguMWwtMjguOCw3MC42NUg0NjRsNDAuMzctOTQuODdoMTkuMWw0MC4zNyw5NC44N0g1NDIuMTNMNTEzLjg3LDExOC4xIi8+PC9zdmc+" alt="Evora" style="width:30vw;max-width:180px;height:auto;display:block"/></div>
+        <div style="font-size:64px;margin-bottom:16px">✅</div>
+        <div style="font-family:var(--fd);font-size:48px;font-weight:800;letter-spacing:2px;text-transform:uppercase;line-height:.95;margin-bottom:12px">
+          PREMIO<span style="display:block;color:var(--red)">RITIRATO</span>
+        </div>
+        <div style="font-family:var(--fs);font-size:18px;color:var(--g);margin-bottom:28px">Hai già ritirato il tuo premio</div>
+        <div style="background:var(--s);border:1px solid var(--b);padding:24px;position:relative;margin-bottom:16px">
+          <div style="position:absolute;top:0;left:0;right:0;height:2px;background:var(--red)"></div>
+          <div style="font-size:14px;color:#aaa;line-height:1.7">
+            Il premio <strong style="color:var(--w)">${a.prizeEmoji} ${a.prizeName}</strong> è stato consegnato il
+            <strong style="color:var(--w)">${a.deliveredAt?new Date(a.deliveredAt).toLocaleDateString('it-IT'):'-'}</strong>.<br><br>
+            Grazie per aver partecipato al concorso Evora!
+          </div>
+        </div>
+        <div style="font-family:var(--fd);font-size:10px;letter-spacing:3px;color:#444;text-transform:uppercase">© Evora Fitness</div>
+      </div>`;
+    return;
+  }
+
+  // STATUS B — assigned but not yet delivered — show prize + QR
+  pg.innerHTML=`
+    <div style="text-align:center;width:100%;max-width:420px;animation:fu .5s cubic-bezier(.16,1,.3,1) both">
+      <div style="font-family:var(--fd);font-size:13px;letter-spacing:6px;color:var(--g);text-transform:uppercase;margin-bottom:32px">EVORA <span style="color:var(--red)">●</span> FIERA 2026</div>
+      <div style="font-size:52px;margin-bottom:12px">${a.prizeEmoji}</div>
+      <div style="font-family:var(--fd);font-size:42px;font-weight:800;letter-spacing:2px;text-transform:uppercase;margin-bottom:8px">
+        HAI GIÀ<span style="display:block;color:var(--red)">GIOCATO</span>
+      </div>
+      <div style="font-family:var(--fs);font-size:18px;color:var(--g);margin-bottom:24px">Il tuo premio è già stato assegnato</div>
+      <div style="background:var(--s);border:1px solid var(--b);padding:24px;position:relative;margin-bottom:16px;text-align:left">
+        <div style="position:absolute;top:0;left:0;right:0;height:3px;background:var(--red)"></div>
+        <div style="font-size:13px;color:var(--g);margin-bottom:12px">Il tuo premio:</div>
+        <div style="font-family:var(--fd);font-size:32px;font-weight:800;letter-spacing:1px;margin-bottom:4px">${a.prizeName}</div>
+        <div style="font-size:13px;color:var(--g);margin-bottom:20px">${a.prizeDesc||''}</div>
+        <div style="font-family:var(--fd);font-size:10px;letter-spacing:4px;color:var(--g);text-transform:uppercase;margin-bottom:6px">Codice Premio</div>
+        <div style="font-family:var(--fd);font-size:22px;letter-spacing:4px;background:var(--s2);border:1px solid var(--b);padding:12px 16px;margin-bottom:16px">${a.code}</div>
+        <div style="text-align:center"><div id="already-qrc" style="background:white;padding:10px;display:inline-block;margin:8px 0"></div></div>
+        <div style="font-size:12px;color:#555;text-align:center;margin-top:8px">Mostra il QR allo staff per ritirare il tuo premio</div>
+      </div>
+      <div style="font-family:var(--fd);font-size:11px;letter-spacing:3px;color:#444;text-transform:uppercase">Ogni persona può partecipare una sola volta</div>
+    </div>`;
+  setTimeout(()=>{
+    const qrEl=document.getElementById('already-qrc');
+    if(qrEl&&window.QRCode) new QRCode(qrEl,{text:a.code,width:130,height:130,colorDark:'#0a0a0a',colorLight:'#ffffff'});
+  },100);
+  // Listen for delivery in realtime
+  const listenKey=cUser.email?'email_'+cUser.email.toLowerCase().replace(/[^a-z0-9]/g,'_'):cUser.token;
+  if(!rtUnsub) rtUnsub=window.DB.listenAssignment(listenKey,d=>{if(d.status==='delivered'){cAsgn=d;showAlreadyPlayed();}});
+}
+
+// ── TEST MODE ─────────────────────────────────────────────────────────────
+function applyTestModeBanner(){
+  const banner=document.getElementById('test-banner');
+  if(!banner) return;
+  const anyActive=testModeReplay||testModeDate;
+  if(anyActive){
+    banner.classList.remove('hidden');
+    document.getElementById('app').style.paddingTop='44px';
+    const parts=[];
+    if(testModeReplay) parts.push('Rigioco sbloccato');
+    if(testModeDate) parts.push('Date bypassate');
+    const txt=document.getElementById('test-banner-txt');
+    if(txt) txt.textContent='🧪 TEST: '+parts.join(' · ');
+  } else {
+    banner.classList.add('hidden');
+    document.getElementById('app').style.paddingTop='';
+  }
+}
+
+async function saveTestMode(){
+  await window.DB.saveConfig('testMode',{replay:testModeReplay,date:testModeDate});
+}
+
+async function toggleTestReplay(){
+  testModeReplay=!testModeReplay;
+  try{
+    await saveTestMode();
+    updateTestModeUI();
+    applyTestModeBanner();
+    const msg=document.getElementById('test-mode-msg');
+    msg.textContent=testModeReplay?'✓ Rigioco sbloccato — stesso contatto può giocare più volte':'✓ Rigioco bloccato — ogni contatto gioca una sola volta';
+    msg.style.color=testModeReplay?'#4ecdc4':'#aaa';
+    setTimeout(()=>msg.textContent='',3000);
+  }catch(e){testModeReplay=!testModeReplay;}
+}
+
+async function toggleTestDate(){
+  testModeDate=!testModeDate;
+  if(!testModeDate) selectedTestDay=-1; // reset day selection when disabling
+  try{
+    await saveTestMode();
+    updateTestModeUI();
+    applyTestModeBanner();
+    const msg=document.getElementById('test-mode-msg');
+    msg.textContent=testModeDate?'✓ Range selezionato — seleziona il range da simulare':'✓ Modalità range automatica — il gioco avanza al range successivo quando uno è esaurito';
+    msg.style.color=testModeDate?'#4ecdc4':'#aaa';
+    setTimeout(()=>msg.textContent='',3000);
+  }catch(e){testModeDate=!testModeDate;}
+}
+
+function renderDayButtons(){
+  const container=document.getElementById('tm-day-btns');
+  if(!container) return;
+  // Use regDays dates if available
+  const days=regDays.map((d,i)=>({label:`Range ${i+1}`,index:i}));
+  container.innerHTML=days.map(d=>`
+    <button onclick="selectTestDay(${d.index})" id="tm-day-${d.index}"
+      style="padding:8px 14px;border:2px solid ${selectedTestDay===d.index?'#4ecdc4':'var(--b)'};background:${selectedTestDay===d.index?'#4ecdc4':'transparent'};color:${selectedTestDay===d.index?'#0a0a0a':'var(--g)'};font-family:var(--fd);font-size:13px;letter-spacing:1px;cursor:pointer;transition:all .15s;border-radius:2px;font-weight:700">
+      ${d.label}
+    </button>`).join('');
+}
+
+function renderWelcomeDaySelector(){} // no-op — day selector is admin-only
+
+
+function selectTestDay(idx){
+  selectedTestDay=idx;
+  saveTestMode(); // persist to Firebase so game page reads it
+  renderDayButtons();
+  const msg=document.getElementById('test-mode-msg');
+  if(msg){
+    msg.textContent=`✓ Simula Range ${idx+1}`;
+    msg.style.color='#4ecdc4';
+    setTimeout(()=>msg.textContent='',3000);
+  }
+}
+
+function updateTestModeUI(){
+  // Replay toggle
+  const rb=document.getElementById('tm-replay-btn');
+  const rl=document.getElementById('tm-replay-label');
+  const rs=document.getElementById('tm-replay-sub');
+  if(rb){
+    if(testModeReplay){
+      rb.textContent='BLOCCA'; rb.style.background='#4ecdc4'; rb.style.color='#0a0a0a'; rb.style.borderColor='#4ecdc4';
+      rl.textContent='RIGIOCO: SBLOCCATO'; rl.style.color='#4ecdc4';
+      rs.textContent='⚠ Stesso contatto può giocare più volte'; rs.style.color='#ff6b6b';
+    } else {
+      rb.textContent='SBLOCCA'; rb.style.background='var(--b)'; rb.style.color='var(--g)'; rb.style.borderColor='var(--b)';
+      rl.textContent='RIGIOCO: BLOCCATO'; rl.style.color='var(--w)';
+      rs.textContent='Lo stesso contatto non può rigiocare'; rs.style.color='var(--g)';
+    }
+  }
+  // Date toggle
+  const db2=document.getElementById('tm-date-btn');
+  const dl=document.getElementById('tm-date-label');
+  const ds=document.getElementById('tm-date-sub');
+  if(db2){
+    if(testModeDate){
+      db2.textContent='RIATTIVA'; db2.style.background='#4ecdc4'; db2.style.color='#0a0a0a'; db2.style.borderColor='#4ecdc4';
+      dl.textContent='DATE: BYPASSED'; dl.style.color='#4ecdc4';
+      ds.textContent='⚠ Il gioco funziona in qualsiasi data'; ds.style.color='#ff6b6b';
+    } else {
+      db2.textContent='BYPASSA'; db2.style.background='var(--b)'; db2.style.color='var(--g)'; db2.style.borderColor='var(--b)';
+      dl.textContent='DATE: ATTIVO'; dl.style.color='var(--w)';
+      ds.textContent='Il gioco funziona solo nelle date configurate'; ds.style.color='var(--g)';
+    }
+  }
+  // Day selector — visible only when date test mode ON
+  const daySel=document.getElementById('tm-day-selector');
+  if(daySel){
+    if(testModeDate){
+      daySel.classList.remove('hidden');
+      renderDayButtons();
+    } else {
+      daySel.classList.add('hidden');
+    }
+  }
+}
+
+function showResult(){
+  // Se è uno sconto, mostra schermata speciale
+  if(cAsgn.isDiscount){
+    showDiscountResult();
+    return;
+  }
+  transitionTo('pg-result');showFooter();
+  document.getElementById('rem').textContent=cAsgn.prizeEmoji;
+  document.getElementById('rnm').textContent=cAsgn.prizeName;
+  document.getElementById('rdc').textContent=cAsgn.prizeDesc;
+  document.getElementById('rct').textContent=cAsgn.code;
+  document.getElementById('qrc').innerHTML='';
+  new QRCode(document.getElementById('qrc'),{text:cAsgn.code,width:130,height:130,colorDark:'#0a0a0a',colorLight:'#ffffff'});
+  fireParticles();
+  if(navigator.vibrate)navigator.vibrate([0,80,40,160,40,80]);
+  if(!rtUnsub)rtUnsub=window.DB.listenAssignment(cUser.token,d=>{if(d.status==='delivered')showTY();});
+}
+
+function showDiscountResult(){
+  hideAll();showFooter();
+  const pg=document.getElementById('pg-welcome');
+  pg.classList.remove('hidden');
+  const code=cAsgn.discountCode||'EVORAFIERA15';
+  pg.innerHTML=`
+    <div style="text-align:center;width:100%;max-width:420px;padding:0 4px 60px;animation:fu .5s cubic-bezier(.16,1,.3,1) both">
+      <div style="display:flex;justify-content:center;width:100%;margin-bottom:32px"><img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA1OTUuMjggMjgyLjYyIj48cGF0aCBmaWxsPSIjZjBlZGU4IiBkPSJNMzEuNDgsOTQuMjFoNzEuMDV2MTguNDRINTIuMDd2MTkuMTFoNDQuNHYxOC40M0g1Mi4wN1YxNzBIMTAzLjJ2MTguNDRIMzEuNDhaIi8+PHBhdGggZmlsbD0iI2YwZWRlOCIgZD0iTTEyNi4yNiw5My44OGgyMi44N2wyNC42Myw2Ni4zNCwyNC42My02Ni4zNGgyMi4zM2wtMzguMDgsOTQuODdoLTE4LjNaIi8+PHBhdGggZmlsbD0iI2YwZWRlOCIgZD0iTTI0MCwxNDEuNTh2LS4yN2MwLTI2Ljc4LDIxLjEzLTQ4LjcxLDUwLjItNDguNzFzNDkuOTIsMjEuNjYsNDkuOTIsNDguNDR2LjI3QzM0MC4xNiwxNjguMDksMzE5LDE5MCwyOTAsMTkwUzI0MCwxNjguMzYsMjQwLDE0MS41OFptNzguNDYsMHYtLjI3YzAtMTYuMTUtMTEuODUtMjkuNi0yOC41My0yOS42UzI2MS43MSwxMjQuOSwyNjEuNzEsMTQxdi4yN2MwLDE2LjE1LDExLjg0LDI5LjYxLDI4LjUzLDI5LjYxUzMxOC41LDE1Ny43MywzMTguNSwxNDEuNThaIi8+PHBhdGggZmlsbD0iI2YwZWRlOCIgZD0iTTM2Nyw5NC4yMUg0MTBjMTIsMCwyMS4xMiwzLjIzLDI3LjQ1LDkuNTYsNS4zOCw1LjM4LDguMDcsMTIuNTEsOC4wNywyMS41M3YuMjdjMCwxNS4yLTguMjEsMjQuNzYtMjAuMTksMjkuMmwyMywzMy42NEg0MjQuMTRMNDA0LDE1OC4yN0gzODcuNjh2MzAuMTRIMzY3Wk00MDguNjcsMTQwYzEwLjIzLDAsMTUuODgtNS4yNSwxNS44OC0xMy4zM3YtLjI2YzAtOS02LjA2LTEzLjQ2LTE2LjI4LTEzLjQ2SDM4Ny42OFYxNDBaIi8+PHBhdGggZmlsbD0iI2YwZWRlOCIgZD0iTTUxMy44NywxMTguMWwtMjguOCw3MC42NUg0NjRsNDAuMzctOTQuODdoMTkuMWw0MC4zNyw5NC44N0g1NDIuMTNMNTEzLjg3LDExOC4xIi8+PC9zdmc+" alt="Evora" style="width:30vw;max-width:180px;height:auto;display:block"/></div>
+      
+      <div style="font-size:72px;margin-bottom:16px">🎟️</div>
+      
+      <div style="font-family:var(--fd);font-size:42px;font-weight:800;letter-spacing:2px;text-transform:uppercase;line-height:.95;margin-bottom:8px">
+        HAI VINTO
+      </div>
+      <div style="font-family:var(--fd);font-size:56px;font-weight:900;letter-spacing:1px;color:var(--red);line-height:.95;margin-bottom:24px">
+        SCONTO 15%
+      </div>
+      
+      <div style="font-family:var(--fs);font-size:14px;color:var(--g);margin-bottom:24px;line-height:1.6">
+        Su tutto lo shop online<br>Valido fino al <strong style="color:var(--w)">30 giugno 2026</strong>
+      </div>
+      
+      <div style="background:var(--s);border:2px dashed var(--red);padding:24px 16px;margin-bottom:20px;position:relative">
+        <div style="font-family:var(--fd);font-size:11px;letter-spacing:3px;color:var(--g);text-transform:uppercase;margin-bottom:10px">Il tuo codice</div>
+        <div id="discount-code-display" style="font-family:var(--fd);font-size:32px;font-weight:900;letter-spacing:3px;color:var(--w);margin-bottom:16px;word-break:break-all">${code}</div>
+        <button onclick="copyDiscountCode('${code}')" style="background:var(--red);color:white;border:none;padding:14px 24px;font-family:var(--fd);font-size:13px;letter-spacing:2px;font-weight:700;cursor:pointer;width:100%;text-transform:uppercase">
+          <span id="copy-btn-text">📋 COPIA CODICE</span>
+        </button>
+      </div>
+      
+      <a href="https://evorafitness.it" target="_blank" style="display:block;background:transparent;color:var(--w);border:1px solid var(--b);padding:14px 24px;font-family:var(--fd);font-size:13px;letter-spacing:2px;font-weight:700;text-decoration:none;text-transform:uppercase;margin-bottom:24px">
+        🛒 VAI ALLO SHOP →
+      </a>
+      
+      <div style="background:rgba(178,34,34,.06);border-left:3px solid var(--red);padding:14px 16px;text-align:left;margin-bottom:20px">
+        <div style="font-size:13px;color:#aaa;line-height:1.6">
+          <strong style="color:var(--w)">Grazie per aver giocato!</strong><br>
+          I gadget fisici sono terminati ma abbiamo riservato uno sconto speciale per te.
+        </div>
+      </div>
+      
+      <div style="font-family:var(--fd);font-size:10px;letter-spacing:3px;color:#444;text-transform:uppercase">© Evora Fitness</div>
+    </div>`;
+  
+  if(navigator.vibrate)navigator.vibrate([0,80,40,160,40,80]);
+}
+
+function copyDiscountCode(code){
+  navigator.clipboard?.writeText(code);
+  const btn=document.getElementById('copy-btn-text');
+  if(btn){
+    btn.textContent='✓ COPIATO';
+    if(navigator.vibrate)navigator.vibrate(40);
+    setTimeout(()=>{btn.textContent='📋 COPIA CODICE';},2000);
+  }
+}
+
+function showTY(){
+  if(rtUnsub){rtUnsub();rtUnsub=null;}
+  transitionTo('pg-ty');hideFooter();
+  if(navigator.vibrate)navigator.vibrate([0,100,50,200,50,100]);
+}
+
+function copyCode(){
+  if(!cAsgn)return;
+  navigator.clipboard?.writeText(cAsgn.code);
+  document.getElementById('cph').textContent='✓ copiato';
+  if(navigator.vibrate)navigator.vibrate(40);
+  setTimeout(()=>document.getElementById('cph').textContent='tocca per copiare',2000);
+}
+
+// ── SCRATCH ───────────────────────────────────────────────────────────────
+function initScratch(){
+  const cv=document.getElementById('scratch-canvas'),W=360,H=240;
+  cv.width=W;cv.height=H;cv.style.height=H+'px';
+  document.getElementById('pbg').style.height=H+'px';
+  const ctx=cv.getContext('2d');
+
+  // ── Draw premium metallic surface ──────────────────────────────────────
+  function drawSurface(onDone){
+    const bg=ctx.createLinearGradient(0,0,W,H);
+    bg.addColorStop(0,'#1e1e1e');bg.addColorStop(0.35,'#252525');bg.addColorStop(0.7,'#1c1c1c');bg.addColorStop(1,'#161616');
+    ctx.fillStyle=bg;ctx.fillRect(0,0,W,H);
+    // Noise
+    for(let n=0;n<2200;n++){const nv=Math.floor(Math.random()*40);ctx.fillStyle=`rgba(${nv},${nv},${nv},0.055)`;ctx.fillRect(Math.random()*W,Math.random()*H,1,1);}
+    // Red diagonals
+    ctx.strokeStyle='rgba(200,30,30,0.30)';ctx.lineWidth=1.2;
+    for(let d=-H;d<W+H;d+=16){ctx.beginPath();ctx.moveTo(d,0);ctx.lineTo(d+H,H);ctx.stroke();}
+    // Scan lines
+    ctx.save();ctx.globalAlpha=0.018;ctx.strokeStyle='#fff';ctx.lineWidth=0.5;
+    for(let hy=0;hy<H;hy+=7){ctx.beginPath();ctx.moveTo(0,hy);ctx.lineTo(W,hy);ctx.stroke();}ctx.restore();
+    // Border
+    ctx.save();ctx.globalAlpha=0.85;ctx.strokeStyle='#cc2222';ctx.lineWidth=3;ctx.strokeRect(4,4,W-8,H-8);ctx.globalAlpha=0.20;ctx.lineWidth=1;ctx.strokeRect(10,10,W-20,H-20);ctx.restore();
+    // Corners
+    [[16,16,0],[W-16,16,Math.PI/2],[W-16,H-16,Math.PI],[16,H-16,-Math.PI/2]].forEach(([cx,cy,a])=>{
+      ctx.save();ctx.globalAlpha=0.30;ctx.strokeStyle='#cc2222';ctx.lineWidth=1.5;const L=11;
+      ctx.beginPath();ctx.moveTo(cx+Math.cos(a)*L,cy+Math.sin(a)*L);ctx.lineTo(cx,cy);ctx.lineTo(cx+Math.cos(a+Math.PI/2)*L,cy+Math.sin(a+Math.PI/2)*L);ctx.stroke();ctx.restore();
+    });
+    // Logo watermark
+    const img=new Image();
+    img.onload=()=>{
+      const tW=W*.76,tH=282.62*(tW/595.28),ox=(W-tW)/2,oy=(H-tH)/2;
+      ctx.save();ctx.globalAlpha=0.85;ctx.drawImage(img,ox,oy,tW,tH);ctx.restore();
+      ctx.save();ctx.globalAlpha=0.08;ctx.fillStyle='#cc2222';ctx.font='700 9px Barlow Condensed,sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText('GRATTA · SCOPRI · VINCI',W/2,oy+tH+14);ctx.restore();
+      ctx.globalCompositeOperation='destination-out';
+      // Reveal prize layer now that canvas covers it
+      const pbgEl=document.getElementById('pbg');if(pbgEl)pbgEl.style.opacity='1';
+      // Start shimmer with white logo as mask — delay 400ms so canvas is painted first
+      setTimeout(()=>{
+        maskImg.src='data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA1OTUuMjggMjgyLjYyIj48cGF0aCBmaWxsPSJ3aGl0ZSIgZD0iTTMxLjQ4LDk0LjIxaDcxLjA1djE4LjQ0SDUyLjA3djE5LjExaDQ0LjR2MTguNDNINTIuMDdWMTcwSDEwMy4ydjE4LjQ0SDMxLjQ4WiIvPjxwYXRoIGZpbGw9IndoaXRlIiBkPSJNMTI2LjI2LDkzLjg4aDIyLjg3bDI0LjYzLDY2LjM0LDI0LjYzLTY2LjM0aDIyLjMzbC0zOC4wOCw5NC44N2gtMTguM1oiLz48cGF0aCBmaWxsPSJ3aGl0ZSIgZD0iTTI0MCwxNDEuNTh2LS4yN2MwLTI2Ljc4LDIxLjEzLTQ4LjcxLDUwLjItNDguNzFzNDkuOTIsMjEuNjYsNDkuOTIsNDguNDR2LjI3QzM0MC4xNiwxNjguMDksMzE5LDE5MCwyOTAsMTkwUzI0MCwxNjguMzYsMjQwLDE0MS41OFptNzguNDYsMHYtLjI3YzAtMTYuMTUtMTEuODUtMjkuNi0yOC41My0yOS42UzI2MS43MSwxMjQuOSwyNjEuNzEsMTQxdi4yN2MwLDE2LjE1LDExLjg0LDI5LjYxLDI4LjUzLDI5LjYxUzMxOC41LDE1Ny43MywzMTguNSwxNDEuNThaIi8+PHBhdGggZmlsbD0id2hpdGUiIGQ9Ik0zNjcsOTQuMjFINDEwYzEyLDAsMjEuMTIsMy4yMywyNy40NSw5LjU2LDUuMzgsNS4zOCw4LjA3LDEyLjUxLDguMDcsMjEuNTN2LjI3YzAsMTUuMi04LjIxLDI0Ljc2LTIwLjE5LDI5LjJsMjMsMzMuNjRINDI0LjE0TDQwNCwxNTguMjdIMzg3LjY4djMwLjE0SDM2N1pNNDA4LjY3LDE0MGMxMC4yMywwLDE1Ljg4LTUuMjUsMTUuODgtMTMuMzN2LS4yNmMwLTktNi4wNi0xMy40Ni0xNi4yOC0xMy40NkgzODcuNjhWMTQwWiIvPjxwYXRoIGZpbGw9IndoaXRlIiBkPSJNNTEzLjg3LDExOC4xbC0yOC44LDcwLjY1SDQ2NGw0MC4zNy05NC44N2gxOS4xbDQwLjM3LDk0Ljg3SDU0Mi4xM0w1MTMuODcsMTE4LjEiLz48L3N2Zz4=';
+      }, 400);
+      if(onDone)onDone();
+    };
+    img.onerror=()=>{ctx.globalCompositeOperation='destination-out';const pbgEl=document.getElementById('pbg');if(pbgEl)pbgEl.style.opacity='1';if(onDone)onDone();};
+    // Fallback timeout per iOS/Safari lenti
+    setTimeout(()=>{if(ctx.globalCompositeOperation!=='destination-out'){ctx.globalCompositeOperation='destination-out';const pbgEl=document.getElementById('pbg');if(pbgEl)pbgEl.style.opacity='1';if(onDone)onDone();}}, 2000);
+    img.src='data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA1OTUuMjggMjgyLjYyIj48cGF0aCBmaWxsPSIjY2MyMjIyIiBkPSJNMzEuNDgsOTQuMjFoNzEuMDV2MTguNDRINTIuMDd2MTkuMTFoNDQuNHYxOC40M0g1Mi4wN1YxNzBIMTAzLjJ2MTguNDRIMzEuNDhaIi8+PHBhdGggZmlsbD0iI2NjMjIyMiIgZD0iTTEyNi4yNiw5My44OGgyMi44N2wyNC42Myw2Ni4zNCwyNC42My02Ni4zNGgyMi4zM2wtMzguMDgsOTQuODdoLTE4LjNaIi8+PHBhdGggZmlsbD0iI2NjMjIyMiIgZD0iTTI0MCwxNDEuNTh2LS4yN2MwLTI2Ljc4LDIxLjEzLTQ4LjcxLDUwLjItNDguNzFzNDkuOTIsMjEuNjYsNDkuOTIsNDguNDR2LjI3QzM0MC4xNiwxNjguMDksMzE5LDE5MCwyOTAsMTkwUzI0MCwxNjguMzYsMjQwLDE0MS41OFptNzguNDYsMHYtLjI3YzAtMTYuMTUtMTEuODUtMjkuNi0yOC41My0yOS42UzI2MS43MSwxMjQuOSwyNjEuNzEsMTQxdi4yN2MwLDE2LjE1LDExLjg0LDI5LjYxLDI4LjUzLDI5LjYxUzMxOC41LDE1Ny43MywzMTguNSwxNDEuNThaIi8+PHBhdGggZmlsbD0iI2NjMjIyMiIgZD0iTTM2Nyw5NC4yMUg0MTBjMTIsMCwyMS4xMiwzLjIzLDI3LjQ1LDkuNTYsNS4zOCw1LjM4LDguMDcsMTIuNTEsOC4wNywyMS41M3YuMjdjMCwxNS4yLTguMjEsMjQuNzYtMjAuMTksMjkuMmwyMywzMy42NEg0MjQuMTRMNDA0LDE1OC4yN0gzODcuNjh2MzAuMTRIMzY3Wk00MDguNjcsMTQwYzEwLjIzLDAsMTUuODgtNS4yNSwxNS44OC0xMy4zM3YtLjI2YzAtOS02LjA2LTEzLjQ2LTE2LjI4LTEzLjQ2SDM4Ny42OFYxNDBaIi8+PHBhdGggZmlsbD0iI2NjMjIyMiIgZD0iTTUxMy44NywxMTguMWwtMjguOCw3MC42NUg0NjRsNDAuMzctOTQuODdoMTkuMWw0MC4zNyw5NC44N0g1NDIuMTNMNTEzLjg3LDExOC4xIi8+PC9zdmc+';
+  }
+
+  let drw=false,lx=null,ly=null,rev=false;
+
+  // ── SHIMMER CANVAS — sovrapposto, rimosso al primo tocco ────────────────
+  const shimCv=document.createElement('canvas');
+  shimCv.width=W; shimCv.height=H;
+  shimCv.style.cssText='position:absolute;inset:0;z-index:3;pointer-events:none;width:100%;height:'+H+'px';
+  cv.parentElement.appendChild(shimCv);
+  const shimCtx=shimCv.getContext('2d');
+  let shimX=-W*0.6; // start position of shimmer band
+  let shimRaf=null;
+  let shimStopped=false;
+
+  // Pre-draw logo mask onto offscreen canvas for shimmer masking
+  const maskCv=document.createElement('canvas');
+  maskCv.width=W; maskCv.height=H;
+  const maskCtx=maskCv.getContext('2d');
+  const maskImg=new Image();
+  maskImg.onload=()=>{
+    const tW=W*.76,tH=282.62*(tW/595.28),ox=(W-tW)/2,oy=(H-tH)/2;
+    maskCtx.drawImage(maskImg,ox,oy,tW,tH);
+    startShimmer(ox,oy,tW,tH);
+  };
+  // Use same logo but white for mask
+  maskImg.src=cv.getAttribute('data-logo-src')||'';
+
+  function startShimmer(ox,oy,tW,tH){
+    const SPEED=1.8;
+    const BAND=W*0.55;
+    function loop(){
+      if(shimStopped)return;
+      shimCtx.clearRect(0,0,W,H);
+
+      // Draw shimmer band clipped to logo shape
+      shimCtx.save();
+      // Use the logo as clipping mask via drawImage + source-in
+      shimCtx.drawImage(maskCv,0,0);
+      shimCtx.globalCompositeOperation='source-in';
+
+      // Shimmer gradient — white light band moving across
+      const gx1=shimX, gx2=shimX+BAND;
+      const sg=shimCtx.createLinearGradient(gx1,0,gx2,0);
+      sg.addColorStop(0,   'rgba(255,255,255,0)');
+      sg.addColorStop(0.3, 'rgba(255,255,255,0)');
+      sg.addColorStop(0.45,'rgba(255,200,200,0.55)');
+      sg.addColorStop(0.5, 'rgba(255,255,255,0.85)');
+      sg.addColorStop(0.55,'rgba(255,200,200,0.55)');
+      sg.addColorStop(0.7, 'rgba(255,255,255,0)');
+      sg.addColorStop(1,   'rgba(255,255,255,0)');
+      shimCtx.fillStyle=sg;
+      shimCtx.fillRect(0,0,W,H);
+      shimCtx.restore();
+
+      shimX+=SPEED;
+      if(shimX>W*1.2) shimX=-W*0.6; // loop back
+      shimRaf=requestAnimationFrame(loop);
+    }
+    loop();
+  }
+
+  // Stop shimmer and remove overlay on first touch
+  function stopShimmer(){
+    if(shimStopped)return;
+    shimStopped=true;
+    if(shimRaf)cancelAnimationFrame(shimRaf);
+    shimCv.style.transition='opacity 0.3s';
+    shimCv.style.opacity='0';
+    setTimeout(()=>shimCv.remove(),350);
+  }
+
+  const xy=e=>{const r=cv.getBoundingClientRect(),sx=W/r.width,sy=H/r.height,s=e.touches?e.touches[0]:e;return[(s.clientX-r.left)*sx,(s.clientY-r.top)*sy];};
+  const sc=(x,y)=>{
+    stopShimmer(); // stop shimmer on first touch
+    const brush=(bx,by,br)=>{const gr=ctx.createRadialGradient(bx,by,0,bx,by,br);gr.addColorStop(0,'rgba(0,0,0,1)');gr.addColorStop(0.55,'rgba(0,0,0,.9)');gr.addColorStop(1,'rgba(0,0,0,0)');ctx.fillStyle=gr;ctx.beginPath();ctx.arc(bx,by,br,0,Math.PI*2);ctx.fill();};
+    brush(x,y,40);
+    if(lx!==null){const dist=Math.hypot(x-lx,y-ly);if(dist>3){const st=Math.ceil(dist/5);for(let i=1;i<st;i++)brush(lx+(x-lx)*(i/st),ly+(y-ly)*(i/st),28);}}
+    lx=x;ly=y;
+    if(navigator.vibrate)navigator.vibrate(6);
+    if(!rev){const d=ctx.getImageData(0,0,W,H).data;let c2=0;for(let i=3;i<d.length;i+=4){if(d[i]<64)c2++;}const pct=c2/(W*H);if(pct>0.14)document.querySelector('.tdot:not(.r)')?.classList.add('r');if(pct>=0.38){rev=true;ctx.clearRect(0,0,W,H);if(navigator.vibrate)navigator.vibrate([0,60,30,120,30,200]);setTimeout(()=>showResult(),1200);}}
+  };
+  const enableScratch=()=>{
+    cv.addEventListener('mousedown', e=>{drw=true;lx=null;ly=null;const[x,y]=xy(e);sc(x,y);});
+    cv.addEventListener('mousemove', e=>{if(!drw)return;const[x,y]=xy(e);sc(x,y);});
+    cv.addEventListener('mouseup',   ()=>{drw=false;lx=null;ly=null;});
+    cv.addEventListener('mouseleave',()=>{drw=false;lx=null;ly=null;});
+    cv.addEventListener('touchstart',e=>{e.preventDefault();drw=true;lx=null;ly=null;const[x,y]=xy(e);sc(x,y);},{passive:false});
+    cv.addEventListener('touchmove', e=>{e.preventDefault();if(!drw)return;const[x,y]=xy(e);sc(x,y);},{passive:false});
+    cv.addEventListener('touchend',  ()=>{drw=false;lx=null;ly=null;});
+  };
+  drawSurface(enableScratch);
+}
+
+// ── PARTICLES ─────────────────────────────────────────────────────────────
+function fireParticles(){
+  const r=document.getElementById('glow');r.classList.remove('active');void r.offsetWidth;r.classList.add('active');
+  const cv=document.getElementById('pcv');cv.style.display='block';cv.width=window.innerWidth;cv.height=window.innerHeight;
+  const ctx=cv.getContext('2d'),cols=['#B22222','#ffffff','#cc3333','#ff6666','#e0e0e0'];
+  let ps=Array.from({length:120},()=>({x:cv.width/2+(Math.random()-.5)*200,y:cv.height*.4,vx:(Math.random()-.5)*14,vy:-(Math.random()*16+6),size:Math.random()*8+3,color:cols[Math.floor(Math.random()*cols.length)],rot:Math.random()*360,rotS:(Math.random()-.5)*8,grav:.45,life:1,decay:Math.random()*.012+.008,shape:Math.random()>.5?'rect':'circle'}));
+  const a=()=>{ctx.clearRect(0,0,cv.width,cv.height);ps=ps.filter(p=>p.life>0);ps.forEach(p=>{p.x+=p.vx;p.y+=p.vy;p.vy+=p.grav;p.vx*=.99;p.rot+=p.rotS;p.life-=p.decay;ctx.save();ctx.globalAlpha=Math.max(0,p.life);ctx.fillStyle=p.color;ctx.translate(p.x,p.y);ctx.rotate(p.rot*Math.PI/180);if(p.shape==='rect')ctx.fillRect(-p.size/2,-p.size/4,p.size,p.size/2);else{ctx.beginPath();ctx.arc(0,0,p.size/2,0,Math.PI*2);ctx.fill();}ctx.restore();});if(ps.length>0)requestAnimationFrame(a);else cv.style.display='none';};
+  requestAnimationFrame(a);
+}
+
+// ── STAFF ─────────────────────────────────────────────────────────────────
+async function showStaff(){
+  hideAll();hideFooter();
+  const e=document.getElementById('pg-staff');
+  e.classList.remove('hidden');e.style.display='block';
+  // Start camera immediately
+  scanActive=true;
+  startCam();
+}
+
+// Staff result rendering after code lookup
+function renderStaffResult(asgn){
+  const el = document.getElementById('scres');
+  if(!asgn){
+    el.innerHTML = `<div style="background:#1a0a0a;border:2px solid #ff6b6b;padding:20px;text-align:center">
+      <div style="font-size:32px;margin-bottom:8px">❌</div>
+      <div style="font-family:var(--fd);font-size:14px;font-weight:700;letter-spacing:3px;color:#ff6b6b">CODICE NON VALIDO</div>
+      <div style="font-size:12px;color:var(--g);margin-top:6px">Codice non trovato o già scaduto</div>
+    </div>`;
+    return;
+  }
+  const delivered = asgn.status === 'delivered';
+  el.innerHTML = `<div style="background:var(--s);border:2px solid ${delivered?'#4ecdc4':'var(--red)'};padding:20px">
+    <div style="text-align:center;margin-bottom:16px">
+      <div style="font-size:48px">${asgn.prizeEmoji||'🎁'}</div>
+      <div style="font-family:var(--fd);font-size:20px;font-weight:900;color:var(--w);margin-top:8px">${asgn.prizeName}</div>
+      <div style="font-size:13px;color:var(--g);margin-top:4px">${asgn.userName||asgn.userEmail||'—'}</div>
+      <div style="font-family:var(--fd);font-size:11px;color:var(--red);letter-spacing:3px;margin-top:6px">${asgn.code}</div>
+    </div>
+    ${delivered
+      ? `<div style="background:rgba(78,205,196,.1);border:1px solid rgba(78,205,196,.3);padding:12px;text-align:center;font-family:var(--fd);font-size:12px;letter-spacing:3px;color:#4ecdc4">✓ PREMIO GIÀ RITIRATO<br><span style="font-size:10px;color:var(--g);font-weight:400">${asgn.deliveredAt?new Date(asgn.deliveredAt).toLocaleString('it-IT'):'—'}</span></div>`
+      : `<button onclick="confirmStaffDelivery('${asgn.id}')" style="width:100%;padding:16px;background:var(--red);border:none;color:var(--w);font-family:var(--fd);font-size:14px;font-weight:700;letter-spacing:3px;cursor:pointer;margin-top:4px">✓ CONFERMA CONSEGNA</button>`
+    }
+  </div>`;
+}
+
+async function confirmStaffDelivery(id){
+  const btn = document.querySelector('#scres button');
+  if(btn){ btn.disabled=true; btn.textContent='⏳ Salvataggio…'; }
+  try{
+    await window.DB.markDelivered(id);
+    if(navigator.vibrate) navigator.vibrate([50,100,50]);
+    // Refresh result to show delivered state
+    const updated = await window.DB.lookupCode(document.getElementById('smin').value || _lastScannedCode || '');
+    if(updated) renderStaffResult(updated);
+    else{
+      document.getElementById('scres').innerHTML = `<div style="background:rgba(78,205,196,.1);border:2px solid #4ecdc4;padding:20px;text-align:center">
+        <div style="font-size:32px">✅</div>
+        <div style="font-family:var(--fd);font-size:14px;font-weight:700;letter-spacing:3px;color:#4ecdc4;margin-top:8px">PREMIO CONSEGNATO</div>
+      </div>`;
+    }
+  }catch(e){
+    if(btn){ btn.disabled=false; btn.textContent='✓ CONFERMA CONSEGNA'; }
+    document.getElementById('scres').innerHTML += '<div style="color:#ff6b6b;font-size:12px;margin-top:8px">Errore. Riprova.</div>';
+  }
+}
+
+let _lastScannedCode = '';
+
+function openModal(id){} // kept for compatibility
+function closeModal(){document.getElementById('cmodal').classList.add('hidden');pendId=null;}
+async function confirmDel(){if(!pendId)return;await window.DB.markDelivered(pendId);closeModal();if(navigator.vibrate)navigator.vibrate([50,100,50]);}
+
+function triggerStaffScan(){
+  scanActive=true;
+  startCam();
+}
+
+// ── SCANNER ───────────────────────────────────────────────────────────────
+function showScan(){
+  // sv-list removed
+  document.getElementById('sv-scan').classList.remove('hidden');
+  document.getElementById('scres').innerHTML='';
+  document.getElementById('scerr').innerHTML='';
+  document.getElementById('smin').value='';
+  scanActive=true;startCam();
+}
+function showList(){} // legacy stub
+async function startCam(){
+  try{
+    const s=await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'}});
+    scanStream=s;const v=document.getElementById('scvid');v.srcObject=s;v.play();
+    if('BarcodeDetector' in window){
+      const det=new BarcodeDetector({formats:['qr_code']});
+      const tick=async()=>{if(!scanActive)return;if(v.readyState===4){try{const c=await det.detect(v);if(c.length>0){hdlScan(c[0].rawValue);return;}}catch{}}requestAnimationFrame(tick);};
+      requestAnimationFrame(tick);
+    }else{document.getElementById('scerr').innerHTML='<div class="seb">Scanner non supportato. Usa il campo manuale.</div>';}
+  }catch(e){document.getElementById('scerr').innerHTML='<div class="seb">Fotocamera non disponibile. Usa il campo manuale.</div>';}
+}
+function stopCamera(){scanActive=false;if(scanStream){scanStream.getTracks().forEach(t=>t.stop());scanStream=null;}}
+function hdlMan(v){const c=v.toUpperCase().trim();if(c.length>=8){const f=allAsgn.find(a=>a.code===c);if(f)hdlScan(c);}}
+async function hdlScan(code){
+  scanActive=false;stopCamera();
+  const inp=document.getElementById('smin');inp.disabled=true;inp.style.opacity='.3';inp.value=code;
+  const a=await window.DB.findByCode(code);
+  if(navigator.vibrate)navigator.vibrate(a?[50,100,50]:[200]);
+  const ct=document.getElementById('scres');
+  if(!a){ct.innerHTML=`<div class="srs"><div style="color:#ff6b6b;font-size:14px;margin-bottom:16px">❌ Codice non trovato: <code style="letter-spacing:2px">${code}</code></div><button class="sag" onclick="rstScan()">🔁 Scansiona di nuovo</button></div>`;return;}
+  if(a.status==='delivered'){ct.innerHTML=`<div class="srs"><div class="sre">${a.prizeEmoji}</div><div class="srp">${a.prizeName}</div><div class="sru">${a.userName||a.userEmail||'—'}</div><div class="src">${a.code}</div><span class="srs2" style="background:rgba(255,255,255,.06);color:#666">✓ GIÀ CONSEGNATO</span><div style="color:#555;font-size:12px;padding:8px 0 16px">Premio già consegnato in precedenza.</div><button class="sag" onclick="rstScan()">🔁 Scansiona di nuovo</button></div>`;return;}
+  ct.innerHTML=`<div class="srs"><div class="sre">${a.prizeEmoji}</div><div class="srp">${a.prizeName}</div><div class="sru">${a.userName||a.userEmail||'—'}</div><div class="src">${a.code}</div><span class="srs2" style="background:rgba(178,34,34,.15);color:var(--red)">⏳ DA CONSEGNARE</span><br><button class="sdl" id="sdlbtn" onclick="scnDel('${a.userToken}')">SEGNA CONSEGNATO</button><div style="color:#555;font-size:11px;text-align:center;margin-top:10px;letter-spacing:1px;font-family:var(--fd)">CONFERMA LA CONSEGNA PRIMA DI SCANSIONARE IL PROSSIMO</div></div>`;
+  document.getElementById('scvid').style.display='none';
+}
+async function scnDel(token){
+  const btn=document.getElementById('sdlbtn');if(btn){btn.textContent='…';btn.disabled=true;}
+  await window.DB.markDelivered(token);
+  if(navigator.vibrate)navigator.vibrate([0,80,40,160]);
+  allAsgn=await window.DB.getAllAssignments();
+  const ct=document.getElementById('scres');
+  ct.innerHTML=`<div class="srs" style="text-align:center;padding:28px 20px"><div style="font-size:52px;margin-bottom:12px">✅</div><div style="font-family:var(--fd);font-size:28px;font-weight:800;letter-spacing:2px;color:#4ecdc4">CONSEGNATO</div><div style="color:var(--g);font-size:13px;margin-top:8px">Premio registrato con successo</div></div>`;
+  document.getElementById('scvid').style.display='';
+  setTimeout(()=>rstScan(),1800);
+}
+function rstScan(){
+  document.getElementById('scres').innerHTML='';
+  const inp=document.getElementById('smin');inp.disabled=false;inp.style.opacity='1';inp.value='';
+  document.getElementById('scvid').style.display='';
+  scanActive=true;startCam();
+}
+
+// ── ADMIN ─────────────────────────────────────────────────────────────────
+async function showAdminPage(){
+  hideAll();hideFooter();
+  const e=document.getElementById('pg-admin');e.classList.remove('hidden');e.style.display='block';
+  await loadPrizes();
+  await loadRegulationConfig();
+  updateTestModeUI();
+  await loadQRSources();
+  switchAdminTab('quick'); // start on Quick Stats tab
+  // Cleanup config obsoleti (silent)
+  cleanupObsoleteConfig();
+}
+
+// Rimuove documenti config non più usati dalla v24
+async function cleanupObsoleteConfig(){
+  try{
+    // fairDates: non serve più (non c'è date check)
+    const fd = await window.DB.getConfig('fairDates');
+    if(fd){
+      await window.DB.saveConfig('fairDates', null); // azzera (ma non cancella il doc)
+      console.log('[Cleanup] fairDates azzerato');
+    }
+  }catch(e){}
+}
+async function loadPrizes(){try{admPrizes=await window.DB.getPrizes();renderPCfg();}catch(e){}}
+function renderPCfg(){
+  document.getElementById('pcfg').innerHTML=admPrizes.map((p,i)=>`
+    <div class="prr">
+      <input class="pri" type="text" value="${p.name||''}" placeholder="Nome premio" onchange="admPrizes[${i}].name=this.value"/>
+      <input class="pri c" type="number" value="${p.qty||0}" min="0" onchange="admPrizes[${i}].qty=parseInt(this.value)||0"/>
+      <input class="pri" type="number" value="${p.value||0}" min="0" step="0.01" onchange="admPrizes[${i}].value=parseFloat(this.value)||0"/>
+      <button class="prd" onclick="rmPrize(${i})">🗑</button>
+    </div>`).join('');
+}
+function addPrize(){admPrizes.push({id:'p'+Date.now(),name:'',emoji:'🎁',color:'#B22222',desc:'',qty:1,assigned:0,order:admPrizes.length+1,value:0});renderPCfg();}
+function rmPrize(i){admPrizes.splice(i,1);admPrizes.forEach((p,j)=>p.order=j+1);renderPCfg();}
+function emojiFor(n=''){const m={zaino:'🎒',shirt:'👕',tshirt:'👕',sconto:'💸',shaker:'🥤',gadget:'🎁',borraccia:'💧',cappello:'🧢'};const k=Object.keys(m).find(k=>n.toLowerCase().includes(k));return k?m[k]:'🎁';}
+async function savePrizesUI(){
+  const msg=document.getElementById('psv');msg.textContent='Salvataggio…';
+  try{
+    const list=admPrizes.map((p,i)=>({...p,order:i+1,emoji:emojiFor(p.name),desc:p.desc||p.name,assigned:p.assigned||0}));
+    await window.DB.savePrizes(list);
+    admPrizes=list;
+    await loadRegDays();
+    await saveRegulationConfig();
+    msg.textContent='✓ Premi salvati';setTimeout(()=>msg.textContent='',3000);
+  }catch(e){msg.textContent='❌ Errore salvataggio';}
+}
+async function savePwds(){
+  const ns=document.getElementById('nsp').value.trim(),na=document.getElementById('nap').value.trim();
+  const msg=document.getElementById('pwsv');
+  if(ns)PWD.staff=ns;if(na)PWD.admin=na;
+  try{await window.DB.saveConfig('passwords',PWD);msg.textContent='✓ Password aggiornate';document.getElementById('nsp').value='';document.getElementById('nap').value='';setTimeout(()=>msg.textContent='',3000);}
+  catch(e){msg.textContent='❌ Errore salvataggio';}
+}
+
+// ── RESET (two-step, uses deleteDoc via window.DB.resetAll) ────────────────
+let resetStep=0;
+function confirmReset(){
+  const msg=document.getElementById('reset-msg');
+  const btn=document.getElementById('reset-btn');
+  if(resetStep===0){
+    resetStep=1;
+    btn.textContent='⚠ SICURO? CLICCA DI NUOVO PER CONFERMARE';
+    btn.style.background='#cc2222';
+    msg.textContent='Clicca di nuovo entro 5 secondi per confermare.';
+    msg.style.color='#ff6b6b';
+    setTimeout(()=>{
+      if(resetStep===1){
+        resetStep=0;
+        btn.textContent='🗑 RESET COMPLETO DATI';
+        btn.style.background='#8b1a1a';
+        msg.textContent='';
+      }
+    },5000);
+  } else {
+    resetStep=0;
+    btn.textContent='🗑 RESET COMPLETO DATI';
+    btn.style.background='#8b1a1a';
+    btn.disabled=true;
+    msg.textContent='Reset in corso…';msg.style.color='#aaa';
+    window.DB.resetAll()
+      .then(async()=>{
+        btn.disabled=false;
+
+        // ── Clear all in-memory state ──────────────────────────────────────
+        regDays=DEFAULT_DATES.map(date=>({date,dist:[]}));
+        regSequences=[[],[],[],[]];
+        regLocked=false;
+        admPrizes=[];
+        savedRegData={company:{name:'Evora',city:'',vat:''},event:{name:'Evora Fiera 2026',venue:'evento fieristico'}};
+        // Clear uploaded regulation (upload UI removed — auto-published now)
+        // Reset test mode
+        testModeReplay=false;
+        testModeDate=false;
+        updateTestModeUI();
+        applyTestModeBanner();
+
+        // ── Reset Admin UI ─────────────────────────────────────────────────
+        // Prizes section
+        renderPCfg();
+
+        // Regulation section — clear fields
+        ['rg-name','rg-vat','rg-addr','rg-city','rg-email','rg-event','rg-venue'].forEach(id=>{
+          const el=document.getElementById(id);
+          if(el) el.value='';
+        });
+        document.getElementById('reg-days').innerHTML='<div style="color:var(--g);font-size:13px">Salva prima i premi, poi clicca "Carica range".</div>';
+        document.getElementById('reg-seq-section').classList.add('hidden');
+        document.getElementById('reg-output').classList.add('hidden');
+        document.getElementById('reg-day-previews').innerHTML='';
+
+        // Reload prizes from Firebase (they still exist, just counters reset)
+        await loadPrizes();
+
+        // Update modal and stats
+        buildRegulationModalText();
+        await loadStats();
+
+        msg.textContent='✓ Reset completato — premi, sequenze, giocatori e configurazione eliminati.';
+        msg.style.color='#4ecdc4';
+        setTimeout(()=>msg.textContent='',6000);
+      })
+      .catch(err=>{
+        btn.disabled=false;
+        msg.textContent='❌ Errore: '+err.message;
+        msg.style.color='#ff6b6b';
+      });
+  }
+}
+
+// ── REGULATION ────────────────────────────────────────────────────────────
+function seededRnd(seed){let s=seed;return()=>{s=(s*1664525+1013904223)&0xffffffff;return(s>>>0)/0xffffffff;};}
+function seededShuffle(arr,seed){const a=[...arr];const r=seededRnd(seed);for(let i=a.length-1;i>0;i--){const j=Math.floor(r()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a;}
+function makeSeed(dayIdx,name){let h=0;const s=`${name}_day${dayIdx}_2026`;for(let i=0;i<s.length;i++){h=((h<<5)-h)+s.charCodeAt(i);h|=0;}return Math.abs(h);}
+
+// Debounced auto-save
+function schedSave(){
+  clearTimeout(saveTimer);
+  saveTimer=setTimeout(()=>saveRegulationConfig(),1500);
+}
+
+async function saveRegulationConfig(){
+  try{
+    const company={name:document.getElementById('rg-name')?.value||'',vat:document.getElementById('rg-vat')?.value||'',addr:document.getElementById('rg-addr')?.value||'',city:document.getElementById('rg-city')?.value||'',email:document.getElementById('rg-email')?.value||''};
+    const event={name:document.getElementById('rg-event')?.value||'',venue:document.getElementById('rg-venue')?.value||''};
+    // Serialize nested arrays as JSON strings — Firestore doesn't support nested arrays
+    const payload={
+      company, event, regLocked,
+      regDays: JSON.stringify(regDays||[]),
+      regSequences: JSON.stringify(regSequences||[]),
+      admPrizes: JSON.stringify(admPrizes||[])
+    };
+    await window.DB.saveConfig('regulation',payload);
+    savedRegData.company=company;
+    savedRegData.event=event;
+    buildRegulationModalText();
+  }catch(e){console.error('saveRegulationConfig error',e);}
+}
+
+async function loadRegulationConfig(){
+  const data=await window.DB.getConfig('regulation');
+  if(!data)return;
+  if(data.company){
+    document.getElementById('rg-name').value=data.company.name||'';
+    document.getElementById('rg-vat').value=data.company.vat||'';
+    document.getElementById('rg-addr').value=data.company.addr||'';
+    document.getElementById('rg-city').value=data.company.city||'';
+    document.getElementById('rg-email').value=data.company.email||'';
+  }
+  if(data.event){
+    document.getElementById('rg-event').value=data.event.name||'';
+    document.getElementById('rg-venue').value=data.event.venue||'';
+  }
+  if(data.regDays&&Array.isArray(data.regDays)&&data.regDays.length>0){
+    regDays=data.regDays;
+  }else if(!Array.isArray(regDays)){
+    regDays=DEFAULT_DATES.map(date=>({date,dist:[]}));
+  }
+  if(data.regLocked) regLocked=data.regLocked;
+  if(data.admPrizes) admPrizes=typeof data.admPrizes==="string"?JSON.parse(data.admPrizes):data.admPrizes;
+  // Load sequences from dedicated documents (authoritative source)
+  try{
+    const seqLoads=await Promise.all([0,1,2,3].map(i=>window.DB.getConfig_seq(i)));
+    const anyLoaded=seqLoads.some(s=>s&&s.length>0);
+    if(anyLoaded) regSequences=seqLoads.map(s=>s||[]);
+    else if(data.regSequences) regSequences=typeof data.regSequences==="string"?JSON.parse(data.regSequences):data.regSequences; // fallback to old format
+  }catch(e){
+    if(data.regSequences) regSequences=typeof data.regSequences==="string"?JSON.parse(data.regSequences):data.regSequences;
+  }
+  renderRegDays();
+  if(regDays.some(d=>(d.dist||[]).length>0)) document.getElementById('reg-seq-section').classList.remove('hidden');
+  if(regSequences.some(s=>s&&s.length>0)){
+    renderRegOutput();
+    document.getElementById('reg-output').classList.remove('hidden');
+  }
+  buildRegulationModalText();
+}
+
+async function loadRegDays(){
+  const prizes=await window.DB.getPrizes();
+  if(!prizes.length){document.getElementById('reg-days').innerHTML='<div style="color:#ff6b6b;font-size:13px">Nessun premio. Salva prima i premi.</div>';return;}
+  // Auto-distribute equally, preserving existing dates
+  regDays=regDays.map((d,dayIdx)=>({
+    ...d,
+    dist:prizes.map(p=>{
+      const base=Math.floor(p.qty/4);
+      const extra=dayIdx<(p.qty%4)?1:0;
+      return{id:p.id,name:p.name,emoji:p.emoji||'🎁',value:p.value||0,totalQty:p.qty,dayQty:base+extra};
+    })
+  }));
+  renderRegDays();
+  document.getElementById('reg-seq-section').classList.remove('hidden');
+}
+
+function renderRegDays(){
+  if(!Array.isArray(regDays)){
+    console.log('[renderRegDays] regDays non array, init');
+    regDays=DEFAULT_DATES.map(date=>({date,dist:[]}));
+  }
+  document.getElementById('reg-days').innerHTML=regDays.map((d,i)=>`
+    <div style="background:var(--s2);border:1px solid var(--b);padding:16px;margin-bottom:12px;border-left:3px solid var(--red)">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">
+        <div style="font-family:var(--fd);font-size:16px;font-weight:700;letter-spacing:2px;flex-shrink:0">RANGE ${i+1}</div>
+        <div style="font-size:11px;color:var(--g);flex:1">posizioni progressive</div>
+      </div>
+      <div style="font-family:var(--fd);font-size:10px;letter-spacing:2px;color:var(--g);margin-bottom:10px;text-transform:uppercase">Quantità per premio in questo range</div>
+      ${(d.dist||[]).map((p,pi)=>`
+        <div style="display:grid;grid-template-columns:1fr auto 80px auto;align-items:center;gap:10px;margin-bottom:8px">
+          <div style="display:flex;align-items:center;gap:8px;min-width:0">
+            <span style="font-size:16px;flex-shrink:0">${p.emoji}</span>
+            <span style="font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${p.name}</span>
+          </div>
+          <span style="font-size:11px;color:var(--g);white-space:nowrap">tot.${p.totalQty}</span>
+          <input type="number" min="0" max="${p.totalQty}" value="${parseInt(p.dayQty)||0}"
+            style="padding:7px 10px;background:#0a0a0a;border:1px solid var(--b);color:var(--w);font-family:var(--fb);font-size:13px;text-align:center;width:100%"
+            oninput="regDays[${i}].dist[${pi}].dayQty=parseInt(this.value)||0;updateRegDayTotals(${i});schedSave()"/>
+          <span style="font-size:11px;color:var(--g);white-space:nowrap" id="reg-rem-${i}-${pi}"></span>
+        </div>`).join('')}
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-top:10px;padding-top:10px;border-top:1px solid var(--b)">
+        <span style="font-size:12px;color:var(--g)">Premi in questo range:</span>
+        <span style="font-family:var(--fd);font-size:16px;font-weight:700" id="reg-day-tot-${i}">0</span>
+      </div>
+      <div id="reg-day-err-${i}" style="font-size:12px;color:#ff6b6b;margin-top:6px;min-height:16px"></div>
+    </div>`).join('');
+  regDays.forEach((_,i)=>updateRegDayTotals(i));
+  updateRegGrandValidation();
+}
+
+function updateRegDayTotals(dayIdx){
+  const tot=(regDays[dayIdx].dist||[]).reduce((s,p)=>s+(parseInt(p.dayQty)||0),0);
+  const el=document.getElementById(`reg-day-tot-${dayIdx}`);
+  if(el)el.textContent=tot;
+  updateRegGrandValidation();
+}
+
+function updateRegGrandValidation(){
+  if(!admPrizes.length)return;
+  admPrizes.forEach((p,pi)=>{
+    const assigned=regDays.reduce((s,d)=>s+(parseInt((d.dist||[])[pi]?.dayQty)||0),0);
+    const remaining=p.qty-assigned;
+    regDays.forEach((_,di)=>{const el=document.getElementById(`reg-rem-${di}-${pi}`);if(el)el.textContent=`rim.${remaining}`;});
+    regDays.forEach((d,di)=>{
+      const errEl=document.getElementById(`reg-day-err-${di}`);
+      if(errEl) errEl.textContent=remaining<0?`⚠ "${p.name}": ${-remaining} in eccesso`:'';
+    });
+  });
+  const hasErrors=admPrizes.some((p,pi)=>regDays.reduce((s,d)=>s+(parseInt((d.dist||[])[pi]?.dayQty)||0),0)>p.qty);
+  const secBtn=document.querySelector('#reg-seq-section .adbb');
+  if(secBtn){secBtn.style.opacity=hasErrors?'.4':'1';secBtn.style.pointerEvents=hasErrors?'none':'auto';}
+}
+
+async function generateRegulation(){
+  // ── Read dates fresh from DOM inputs before anything else ─────────────
+  document.querySelectorAll('[id^="reg-day-input-"]').forEach((el,i)=>{
+    if(regDays[i]) regDays[i].date=el.value;
+  });
+  // Also read from the rendered inputs (they use onchange but may not have fired)
+  const dateInputs=document.querySelectorAll('#reg-days input[type="date"]');
+  dateInputs.forEach((el,i)=>{
+    if(regDays[i]&&el.value) regDays[i].date=el.value;
+  });
+
+  let err=false;
+  admPrizes.forEach((p,pi)=>{if(regDays.reduce((s,d)=>s+(parseInt((d.dist||[])[pi]?.dayQty)||0),0)>p.qty)err=true;});
+  if(err){alert('Errore: hai distribuito più premi del totale. Correggi prima.');return;}
+  const name=document.getElementById('rg-event').value||'FITNESS EXPO 2026';
+  regSequences=regDays.map((d,i)=>{
+    const exp=[];
+    (d.dist||[]).forEach(p=>{for(let j=0;j<(parseInt(p.dayQty)||0);j++)exp.push({name:p.name,emoji:p.emoji||'🎁',value:p.value||0});});
+    return seededShuffle(exp,makeSeed(i,name));
+  });
+  regLocked=true;
+  renderRegOutput();
+  document.getElementById('reg-output').classList.remove('hidden');
+  document.getElementById('reg-msg').textContent='Salvataggio in corso…';
+  buildRegulationModalText();
+  await saveRegulationConfig();
+
+  // ── Save each range sequence as a SEPARATE Firebase document (per allegati regolamento) ─
+  for(let i=0;i<regSequences.length;i++){
+    await window.DB.saveDaySequence(i, regSequences[i]);
+  }
+  
+  // ── Save UNIFIED main sequence (concatenazione dei 4 range) ──────────
+  // Questa è la sequenza che il gioco usa: range1 + range2 + range3 + range4
+  const mainSequence = regSequences.flat();
+  console.log("[generateRegulation] Sequenza unica generata:",mainSequence.length,"premi totali");
+  await window.DB.saveDaySequence("main", mainSequence);
+
+  // Auto-save regulation HTML directly to Firebase for user modal
+  const regHtmlContent = generateRegulationHTMLString();
+  await window.DB.saveConfig('regulation_html', regHtmlContent);
+  savedRegData.regulationHtml = regHtmlContent;
+  buildRegulationModalText();
+
+  document.getElementById('reg-msg').textContent='✓ Sequenze generate — regolamento pubblicato automaticamente';
+  setTimeout(()=>document.getElementById('reg-msg').textContent='',4000);
+}
+
+function renderRegOutput(){
+  const name=document.getElementById('rg-event').value||'FITNESS EXPO 2026';
+  document.getElementById('reg-day-previews').innerHTML=regSequences.map((seq,i)=>`
+    <div style="margin-bottom:16px">
+      <div style="display:flex;align-items:center;justify-content:space-between;background:var(--b);padding:10px 14px">
+        <div style="font-family:var(--fd);font-size:14px;font-weight:700;letter-spacing:2px">RANGE ${i+1} — ${regDays[i].date||'—'}</div>
+        <div style="display:flex;align-items:center;gap:10px">
+          <span style="font-family:var(--fd);font-size:11px;color:var(--g)">Seed:${makeSeed(i,name)} · ${seq.length}premi</span>
+          <button onclick="downloadCSV(${i})" style="padding:5px 12px;background:var(--red);color:white;border:none;font-family:var(--fd);font-size:11px;letter-spacing:1px;cursor:pointer">⬇ CSV</button>
+        </div>
+      </div>
+      <div style="max-height:260px;overflow-y:auto;border:1px solid var(--b);border-top:none">
+        <table style="width:100%;border-collapse:collapse;font-size:12px">
+          <thead><tr style="background:#0d0d0d">
+            <th style="padding:7px 12px;text-align:left;color:var(--g);font-family:var(--fd);letter-spacing:1px;width:50px">#</th>
+            <th style="padding:7px 12px;width:30px"></th>
+            <th style="padding:7px 12px;text-align:left;color:var(--g);font-family:var(--fd);letter-spacing:1px">Premio</th>
+            <th style="padding:7px 12px;text-align:right;color:var(--g);font-family:var(--fd);letter-spacing:1px">Valore</th>
+          </tr></thead>
+          <tbody>${seq.map((p,idx)=>`
+            <tr style="border-top:1px solid #1a1a1a${idx<3?';background:rgba(178,34,34,.04)':''}">
+              <td style="padding:7px 12px;font-family:var(--fd);font-size:11px;color:${idx<3?'var(--red)':'var(--g)'};font-weight:${idx<3?'700':'400'}">${idx+1}</td>
+              <td style="padding:7px 12px">${p.emoji||'🎁'}</td>
+              <td style="padding:7px 12px;font-weight:${idx<3?'700':'400'}">${p.name}</td>
+              <td style="padding:7px 12px;text-align:right;font-family:var(--fd);font-size:11px;color:var(--g)">€${parseFloat(p.value||0).toFixed(2)}</td>
+            </tr>`).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>`).join('');
+}
+
+function downloadCSV(dayIdx){
+  if(!Array.isArray(regSequences)||!regSequences[dayIdx]||!regSequences[dayIdx].length)return;
+  if(!Array.isArray(regDays)||!regDays[dayIdx])return;
+  const seq=regSequences[dayIdx];
+  const name=document.getElementById('rg-event').value||'FITNESS_EXPO';
+  const date=regDays[dayIdx].date||`giorno${dayIdx+1}`;
+  let csv=`PIANO DISTRIBUZIONE PREMI — RANGE ${dayIdx+1}\nSeed: ${makeSeed(dayIdx,name)}\n\nPosizione,Premio,Valore Euro,Emoji\n`;
+  csv+=seq.map((p,i)=>`${i+1},"${p.name}",${parseFloat(p.value||0).toFixed(2)},"${p.emoji||'🎁'}"`).join('\n');
+  dlFile(csv,`piano_premi_giorno${dayIdx+1}_${date}.csv`,'text/csv');
+}
+function downloadAllCSV(){if(Array.isArray(regSequences))regSequences.forEach((_,i)=>downloadCSV(i));}
+
+// ── REGULATION HTML GENERATOR ─────────────────────────────────────────────
+// Shared function used both for download and for auto-publish to Firebase
+function generateRegulationHTMLString(){
+  const co={
+    name:(document.getElementById('rg-name')?.value)||savedRegData.company?.name||'',
+    vat:(document.getElementById('rg-vat')?.value)||savedRegData.company?.vat||'',
+    addr:(document.getElementById('rg-addr')?.value)||savedRegData.company?.addr||'',
+    city:(document.getElementById('rg-city')?.value)||savedRegData.company?.city||'',
+    email:(document.getElementById('rg-email')?.value)||savedRegData.company?.email||''
+  };
+  const ev={
+    name:(document.getElementById('rg-event')?.value)||savedRegData.event?.name||'EVORA — Gratta & Vinci',
+    venue:(document.getElementById('rg-venue')?.value)||savedRegData.event?.venue||''
+  };
+  const today=new Date().toLocaleDateString('it-IT');
+  const evName=ev.name||'EVORA — Gratta & Vinci';
+  const totalPrizes=regDays.reduce((s,d)=>s+(d.dist||[]).reduce((ps,p)=>ps+(parseInt(p.dayQty)||0),0),0);
+  const totalValue=regDays.reduce((s,d)=>s+(d.dist||[]).reduce((ps,p)=>ps+(parseFloat(p.value)||0)*(parseInt(p.dayQty)||0),0),0);
+  return `<!DOCTYPE html><html lang="it"><head><meta charset="UTF-8"><title>Regolamento — ${evName}</title>
+<style>body{font-family:Georgia,serif;max-width:800px;margin:40px auto;padding:0 32px;color:#1a1a1a;line-height:1.8;font-size:14px}h1{font-size:22px;text-align:center;margin-bottom:6px;text-transform:uppercase;letter-spacing:1px}h2{font-size:15px;margin:24px 0 8px;border-bottom:1px solid #ccc;padding-bottom:4px;text-transform:uppercase;letter-spacing:.5px}p{margin-bottom:10px}table{width:100%;border-collapse:collapse;margin:12px 0;font-size:13px;page-break-inside:avoid}th{background:#f0f0f0;padding:7px 10px;text-align:left;border:1px solid #ccc;font-weight:bold}td{padding:6px 10px;border:1px solid #ddd}tr:nth-child(even) td{background:#fafafa}.hdr{text-align:center;border:2px solid #1a1a1a;padding:20px;margin-bottom:32px}.pb{page-break-before:always}.sm{font-size:11px;color:#666}.ft{margin-top:48px;text-align:center;font-size:11px;color:#888;border-top:1px solid #eee;padding-top:16px}@media print{body{margin:20mm}}</style>
+</head><body>
+<div class="hdr"><h1>REGOLAMENTO CONCORSO A PREMI</h1><p style="font-weight:bold;font-size:16px">${evName.toUpperCase()}</p><p class="sm">ai sensi del D.P.R. 26 novembre 2001, n. 430 — Redatto il ${today}</p></div>
+<h2>Art. 1 — Soggetto Promotore</h2><p><strong>${co.name||'[RAGIONE SOCIALE]'}</strong>, sede: ${co.addr||'[INDIRIZZO]'}, P.IVA ${co.vat||'[PIVA]'}, email: ${co.email||'[EMAIL]'}.</p>
+<h2>Art. 2 — Oggetto</h2><p>Operazione a premi <strong>"${evName}"</strong> in occasione di <strong>${ev.venue||'[FIERA]'}</strong>.</p>
+<h2>Art. 3 — Partecipazione</h2><p>Persone fisiche maggiorenni che compilano il modulo di registrazione e partecipano al gioco digitale. <strong>Una sola partecipazione per persona.</strong></p>
+<h2>Art. 4 — Periodo</h2><table><tr><th>Giorno</th><th>Data</th><th>Luogo</th><th>N. Premi</th></tr>${regDays.map((d,i)=>`<tr><td>Giorno ${i+1}</td><td>${d.date?fmtDate(d.date):'—'}</td><td>${ev.venue||'Stand Promotore'}</td><td>${(d.dist||[]).reduce((s,p)=>s+(parseInt(p.dayQty)||0),0)}</td></tr>`).join('')}</table>
+<h2>Art. 5 — Premi</h2><table><tr><th>Giorno</th><th>Premio</th><th>Qtà</th><th>Valore unitario</th><th>Valore totale</th></tr>${regDays.map((d,i)=>(d.dist||[]).filter(p=>p.name).map(p=>`<tr><td>Giorno ${i+1} — ${d.date?fmtDate(d.date):''}</td><td>${p.emoji||''} ${p.name}</td><td>${p.dayQty||0}</td><td>€${parseFloat(p.value||0).toFixed(2)}</td><td>€${(parseFloat(p.value||0)*(parseInt(p.dayQty)||0)).toFixed(2)}</td></tr>`).join('')).join('')}<tr><td colspan="2"><strong>TOTALE</strong></td><td><strong>${totalPrizes}</strong></td><td>—</td><td><strong>€${totalValue.toFixed(2)}</strong></td></tr></table>
+<h2>Art. 6 — Meccanismo</h2><p>Sequenza predeterminata con algoritmo Fisher-Yates seed deterministico. Il primo partecipante riceve il premio in posizione 1, il secondo in posizione 2, ecc.</p>${regDays.map((d,i)=>`<p>Giorno ${i+1} (${d.date?fmtDate(d.date):'—'}) — Seed: <strong>${makeSeed(i,evName)}</strong></p>`).join('')}
+<h2>Art. 7 — Consegna</h2><p>Premio consegnato immediatamente allo stand previa verifica codice univoco.</p>
+<h2>Art. 8 — Privacy</h2><p>Titolare: ${co.name||'[RAGIONE SOCIALE]'}. GDPR UE 2016/679. Contatto: ${co.email||'[EMAIL]'}.</p>
+<h2>Art. 9 — Foro Competente</h2><p>Foro: ${co.city||'[CITTÀ]'}. Normativa: D.P.R. 430/2001.</p>
+${regSequences.map((seq,i)=>seq&&seq.length>0?`<div class="pb"><h2>ALLEGATO ${i+1} — RANGE ${i+1}: ${regDays[i].date?fmtDate(regDays[i].date):'—'}</h2><p class="sm">Seed: ${makeSeed(i,evName)} | ${today} | ${seq.length} premi</p><table><tr><th style="width:60px">#</th><th>Premio</th><th style="width:120px">Valore €</th></tr>${seq.map((p,idx)=>`<tr><td>${idx+1}</td><td>${p.emoji||''} ${p.name}</td><td>€${parseFloat(p.value||0).toFixed(2)}</td></tr>`).join('')}</table></div>`:'').join('')}
+<div class="ft">— Fine del Regolamento — ${today} —</div>
+
+<!-- Access menu (5 taps on logo to reveal) -->
+<div id="access-menu" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);backdrop-filter:blur(8px);z-index:9999;align-items:center;justify-content:center;padding:24px" onclick="closeAccessMenu(event)">
+  <div style="background:#0f0f0f;border:1px solid #2a2a2a;padding:24px;max-width:320px;width:100%;position:relative" onclick="event.stopPropagation()">
+    <div style="position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent,#B22222,transparent)"></div>
+    <div style="font-family:'Barlow Condensed',sans-serif;font-size:10px;letter-spacing:5px;color:#666;text-transform:uppercase;text-align:center;margin-bottom:6px">Accesso Riservato</div>
+    <div style="font-family:'Barlow Condensed',sans-serif;font-size:22px;font-weight:800;letter-spacing:3px;text-align:center;color:#f0ede8;text-transform:uppercase;margin-bottom:20px">Gestione</div>
+    <button onclick="goToStaff()" style="width:100%;padding:14px;background:rgba(255,255,255,.04);border:1px solid #2a2a2a;color:#f0ede8;font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:700;letter-spacing:3px;text-transform:uppercase;cursor:pointer;margin-bottom:10px">Staff</button>
+    <button onclick="goToAdmin()" style="width:100%;padding:14px;background:rgba(255,255,255,.04);border:1px solid #2a2a2a;color:#f0ede8;font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:700;letter-spacing:3px;text-transform:uppercase;cursor:pointer;margin-bottom:14px">Admin</button>
+    <button onclick="closeAccessMenu()" style="width:100%;padding:10px;background:transparent;border:none;color:#555;font-family:'Barlow Condensed',sans-serif;font-size:11px;letter-spacing:3px;text-transform:uppercase;cursor:pointer">Annulla</button>
+  </div>
+</div>
+
+</body></html>`;
+}
+
+function downloadRegulationHTML(){
+  const evName=(document.getElementById('rg-event')?.value)||'EVORA_Gratta_Vinci';
+  const today=new Date().toLocaleDateString('it-IT');
+  dlFile(generateRegulationHTMLString(),`regolamento_${evName.replace(/\s+/g,'_')}_${today.replace(/\//g,'-')}.html`,'text/html');
+}
+
+// ── FINGERPRINT POINTER ────────────────────────────────────────────────────
+// Call after assignment to also index by fingerprint for cross-device blocking
+async function saveFingerprint(fingerprint, primaryKey, email, assignedAt){
+  if(!fingerprint||!primaryKey) return;
+  const fpKey='fp_'+fingerprint;
+  if(fpKey===primaryKey) return;
+  try{
+    const existing=await window.DB.getDoc_('assignments',fpKey);
+    if(!existing) await window.DB.saveAssignmentPointer(fpKey,{_ref:primaryKey,userEmail:email,fingerprint,assignedAt});
+  }catch(e){}
+}
+
+function dlFile(content,filename,type){
+  const b=new Blob([content],{type:type+';charset=utf-8;'});
+  const u=URL.createObjectURL(b);
+  const a=document.createElement('a');a.href=u;a.download=filename;a.click();
+  URL.revokeObjectURL(u);
+}
+
+async function loadStats(){
+  const el=document.getElementById('adstats');
+  try{
+    const all=await window.DB.getAllAssignments(),prizes=await window.DB.getPrizes();
+    const del=all.filter(a=>a.status==='delivered').length;
+    const rem=prizes.reduce((s,p)=>s+Math.max(0,p.qty-p.assigned),0);
+    el.innerHTML=`<div class="dstat" style="margin-bottom:0">
+      <div class="dsc"><div class="dsn">${all.length}</div><div class="dsl">Giocatori</div></div>
+      <div class="dsc"><div class="dsn" style="color:var(--red)">${all.length-del}</div><div class="dsl">Da consegnare</div></div>
+      <div class="dsc"><div class="dsn">${del}</div><div class="dsl">Consegnati</div></div>
+      <div class="dsc"><div class="dsn">${rem}</div><div class="dsl">Premi rimasti</div></div>
+    </div>`;
+  }catch(e){el.innerHTML='<div style="color:#ff6b6b;font-size:13px">Errore</div>';}
+}
+
+
+// ── QR TRACKING ───────────────────────────────────────────────────────────
+let qrSources = []; // loaded from Firestore
+
+async function loadQRSources(){
+  const el = document.getElementById('qr-sources-list');
+  if(el) el.innerHTML = '<div class="dld">Caricamento…</div>';
+  try{
+    const snap = await window.DB.getConfig('qr_sources');
+    qrSources = snap || [];
+    renderQRSources();
+  }catch(e){ if(el) el.innerHTML = '<div style="color:#f66">Errore caricamento</div>'; }
+}
+
+// ── ADMIN CACHE & REFRESH SYSTEM ─────────────────────────────────────────
+let _dashCache = null;
+let _dashFilter = '';
+const DASH_FREE_REFRESHES = 5;
+
+function getDashRefreshState(){
+  const today = new Date().toISOString().slice(0,10);
+  try{
+    const raw = localStorage.getItem('evora_dash_refresh');
+    if(raw){
+      const s = JSON.parse(raw);
+      if(s.date === today) return s;
+    }
+  }catch(e){}
+  return {date:today, count:0};
+}
+
+function saveDashRefreshState(state){
+  try{ localStorage.setItem('evora_dash_refresh', JSON.stringify(state)); }catch(e){}
+}
+
+async function dashRefresh(force){
+  const state = getDashRefreshState();
+  const remaining = DASH_FREE_REFRESHES - state.count;
+  const btn = document.getElementById('dash-refresh-btn');
+
+  if(!force && remaining <= 0){
+    if(btn && btn.dataset.confirm === '1'){
+      btn.dataset.confirm = '0';
+    } else if(btn) {
+      btn.dataset.confirm = '1';
+      btn.style.background = '#8b1a1a';
+      btn.innerHTML = '⚠ CLICCA ANCORA PER CONFERMARE';
+      setTimeout(()=>{
+        if(btn) {
+          btn.dataset.confirm = '0';
+          btn.style.background = 'var(--red)';
+          updateDashRefreshBtn();
+        }
+      }, 3000);
+      return;
+    }
+  }
+
+  if(btn) btn.innerHTML = '⏳ Caricamento…';
+
+  try{
+    const [assignments, scans, prizes] = await Promise.all([
+      window.DB.getAllAssignments(),
+      window.DB.getAllScans ? window.DB.getAllScans() : Promise.resolve([]),
+      window.DB.getPrizes()
+    ]);
+    // Calcola totali per nome dalla sequenza main + emergency
+    const _seqTotals = {};
+    try{
+      const [mainSnap, extSnap] = await Promise.all([
+        window.DB.getDoc_("sequences","main"),
+        window.DB.getDoc_("sequences","emergency")
+      ]);
+      const allSeq = [...((mainSnap&&mainSnap.prizes)||[]), ...((extSnap&&extSnap.prizes)||[])];
+      allSeq.forEach(p=>{
+        const n = p.name || 'Sconosciuto';
+        _seqTotals[n] = (_seqTotals[n]||0) + 1;
+      });
+    }catch(e){ console.log("[Dash] seqTotals error:",e); }
+    _dashCache = {assignments, scans, prizes, _seqTotals, loadedAt: new Date()};
+
+    state.count++;
+    state.date = new Date().toISOString().slice(0,10);
+    saveDashRefreshState(state);
+
+    renderDashboard();
+    renderDashChips();
+  }catch(e){
+    console.error('dashRefresh error:', e);
+    if(btn) btn.innerHTML = '↺ AGGIORNA';
+  }
+}
+
+function updateDashRefreshBtn(){
+  const state = getDashRefreshState();
+  const remaining = Math.max(0, DASH_FREE_REFRESHES - state.count);
+  const btn = document.getElementById('dash-refresh-btn');
+  if(!btn) return;
+  if(remaining > 0){
+    btn.innerHTML = `↺ AGGIORNA <span style="opacity:.7;font-size:10px">(${remaining} rimast${remaining===1?'o':'i'})</span>`;
+    btn.style.background = 'var(--red)';
+  } else {
+    btn.innerHTML = `↺ AGGIORNA <span style="opacity:.7;font-size:10px">(0 rimasti)</span>`;
+    btn.style.background = '#555';
+  }
+  const lu = document.getElementById('dash-last-update');
+  if(lu && _dashCache){
+    lu.textContent = _dashCache.loadedAt.toLocaleTimeString('it-IT',{hour:'2-digit',minute:'2-digit'});
+  }
+}
+
+function setDashFilter(ref){
+  _dashFilter = ref;
+  document.querySelectorAll('.qr-chip').forEach(c=>{
+    c.classList.toggle('active', c.dataset.ref === ref);
+  });
+  renderDashboard();
+}
+
+function renderDashChips(){
+  const container = document.getElementById('dash-qr-chips');
+  if(!container) return;
+  const sources = (qrSources || []).filter(s=>s && s.id);
+  const chips = [{id:'',name:'TOTALE'}, ...sources.map(s=>({id:s.id, name:s.name||s.id}))];
+  container.innerHTML = chips.map(s=>
+    `<button class="qr-chip${_dashFilter===s.id?' active':''}" data-ref="${s.id}" onclick="setDashFilter('${s.id}')">${s.name}</button>`
+  ).join('');
+}
+
+function renderDashboard(){
+  if(!_dashCache) return;
+  updateDashRefreshBtn();
+
+  const {assignments, scans, prizes} = _dashCache;
+  const ref = _dashFilter;
+
+  const realAsgn = (assignments||[]).filter(a => a && !a._ref);
+  // ref is the QR source id (e.g. "federica", "hostess-1")
+  const filtAsgn = ref ? realAsgn.filter(a=>(a.ref||'').toLowerCase()===ref.toLowerCase()) : realAsgn;
+  const filtScans = ref ? (scans||[]).filter(s=>s && (s.ref||'').toLowerCase()===ref.toLowerCase()) : (scans||[]);
+
+  const total_scans = filtScans.length;
+  const total_played = filtAsgn.length;
+  const total_delivered = filtAsgn.filter(a=>a.status==='delivered').length;
+  const total_assigned = filtAsgn.length;
+
+  const setText = (id, val) => { const el = document.getElementById(id); if(el) el.textContent = val; };
+  setText('dc-scans', total_scans || '—');
+  setText('dc-played', total_played);
+  setText('dc-assigned', total_assigned);
+  setText('dc-delivered', total_delivered);
+
+  const funnel = document.getElementById('dash-funnel');
+  if(funnel){
+    const maxVal = Math.max(total_scans, total_played, 1);
+    const steps = [
+      {label:'SCANSIONI', val:total_scans, prev:null},
+      {label:'GIOCATE', val:total_played, prev:total_scans},
+      {label:'ASSEGNATI', val:total_assigned, prev:total_played},
+      {label:'CONSEGNATI', val:total_delivered, prev:total_assigned}
+    ];
+    funnel.innerHTML = steps.map(s=>{
+      const pct = maxVal > 0 ? Math.round(s.val/maxVal*100) : 0;
+      const drop = s.prev !== null && s.prev > 0 ? s.prev - s.val : null;
+      return `<div class="funnel-row">
+        <div class="funnel-label">
+          <span class="funnel-lbl-name">${s.label}</span>
+          <span style="display:flex;gap:8px;align-items:center">
+            ${drop !== null && drop > 0 ? `<span class="funnel-lbl-drop">-${drop}</span>` : ''}
+            <span class="funnel-lbl-num">${s.val}</span>
+          </span>
+        </div>
+        <div class="funnel-track"><div class="funnel-fill" style="width:${pct}%"></div></div>
+      </div>`;
+    }).join('');
+  }
+
+  const prizeEl = document.getElementById('dash-prizes');
+  if(prizeEl){
+    // Conta i premi assegnati per nome
+    const byPrize = {};
+    filtAsgn.forEach(a=>{
+      const name = a.prizeName || 'Sconosciuto';
+      if(!byPrize[name]) byPrize[name] = {total:0, delivered:0};
+      byPrize[name].total++;
+      if(a.status==='delivered') byPrize[name].delivered++;
+    });
+    
+    // Conta i totali nella sequenza (main + emergency) per nome
+    const seqTotals = _dashCache._seqTotals || {};
+    
+    if(Object.keys(byPrize).length === 0){
+      prizeEl.innerHTML = '<div style="color:var(--g);font-size:13px">Nessun premio assegnato ancora.</div>';
+    } else {
+      prizeEl.innerHTML = Object.entries(byPrize).map(([name,data])=>{
+        // Quantità totale prevista nella sequenza
+        const qtyInSeq = seqTotals[name] || 0;
+        // Se il nome non è nella sequenza (es. premi storici), usa i dati assegnati come fallback
+        const qty = qtyInSeq > 0 ? qtyInSeq : data.total;
+        // % consegnati su totale previsto (NON % assegnati)
+        const pctDelivered = qty > 0 ? Math.round(data.delivered/qty*100) : 0;
+        const exhausted = data.total >= qty;
+        return `<div style="margin-bottom:12px">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+            <span style="font-size:13px">${name}</span>
+            <span style="display:flex;gap:8px;align-items:center">
+              <span style="font-size:11px;color:var(--g)">${data.delivered}/${qty} ritirati</span>
+              <span style="font-family:var(--fd);font-size:12px;font-weight:700">${data.total}/${qty}</span>
+              ${exhausted && data.delivered < qty ? '<span style="font-size:9px;background:rgba(245,166,35,.2);color:#f5a623;padding:2px 6px;letter-spacing:1px">DA RITIRARE</span>' : ''}
+              ${data.delivered >= qty && qty > 0 ? '<span style="font-size:9px;background:rgba(78,205,196,.2);color:#4ecdc4;padding:2px 6px;letter-spacing:1px">COMPLETATO</span>' : ''}
+            </span>
+          </div>
+          <div class="funnel-track"><div class="funnel-fill" style="width:${pctDelivered}%;background:linear-gradient(90deg,var(--red),#cc3333)"></div></div>
+        </div>`;
+      }).join('');
+    }
+  }
+}
+
+// ── ADMIN TAB SWITCHING ───────────────────────────────────────────────────
+// ── QUICK STATS ───────────────────────────────────────────────────────────
+async function quickStatsRefresh(){
+  const btn = document.querySelector('[onclick="quickStatsRefresh()"]');
+  if(btn){ btn.disabled=true; btn.textContent='⏳ Caricamento…'; }
+  try{
+    // Conta direttamente da assignments per coerenza con dashboard
+    const allAsgn = await window.DB.getAllAssignments();
+    const realAsgn = allAsgn.filter(a=>a && !a._ref && !a.isTest);
+    
+    // Conta giocate per data
+    const stats = {};
+    realAsgn.forEach(a=>{
+      if(!a.assignedAt) return;
+      const date = a.assignedAt.slice(0,10);
+      stats[date] = (stats[date]||0) + 1;
+    });
+    
+    const today = new Date().toISOString().slice(0,10);
+    // Today
+    const todayCount = stats[today] || 0;
+    document.getElementById('qs-today').textContent = todayCount;
+    // All days sorted
+    const days = Object.entries(stats)
+      .filter(([k])=>k.match(/^\d{4}-\d{2}-\d{2}$/))
+      .sort((a,b)=>b[0].localeCompare(a[0]));
+    const daysEl = document.getElementById('qs-days');
+    if(days.length <= 1){
+      daysEl.innerHTML = '';
+    } else {
+      const maxVal = Math.max(...days.map(d=>d[1]),1);
+      daysEl.innerHTML = `<div style="font-family:var(--fd);font-size:9px;letter-spacing:3px;color:var(--g);text-transform:uppercase;margin-bottom:8px">Storico</div>` +
+        days.map(([date,count])=>{
+          const label = date === today ? 'OGGI' : new Date(date+'T12:00:00').toLocaleDateString('it-IT',{weekday:'short',day:'numeric',month:'short'}).toUpperCase();
+          const pct = Math.round(count/maxVal*100);
+          return `<div style="margin-bottom:10px">
+            <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px">
+              <span style="font-family:var(--fd);letter-spacing:2px;color:${date===today?'var(--w)':'var(--g)'}">${label}</span>
+              <span style="font-family:var(--fd);font-weight:700;color:${date===today?'var(--w)':'var(--g)'}">${count}</span>
+            </div>
+            <div style="background:var(--b);height:4px"><div style="height:100%;background:${date===today?'var(--red)':'#444'};width:${pct}%;transition:width .4s"></div></div>
+          </div>`;
+        }).join('');
+    }
+    // Last update
+    const lu = document.getElementById('qs-last-update');
+    if(lu) lu.textContent = 'Aggiornato: '+new Date().toLocaleTimeString('it-IT',{hour:'2-digit',minute:'2-digit'});
+  }catch(e){
+    document.getElementById('qs-today').textContent = 'ERR';
+    console.error('quickStats error:', e);
+  }finally{
+    if(btn){ btn.disabled=false; btn.textContent='↺ AGGIORNA'; }
+  }
+}
+
+function switchAdminTab(tab){
+  document.querySelectorAll('.adm-tab').forEach(t=>t.classList.toggle('active', t.dataset.tab===tab));
+  document.querySelectorAll('.adm-tab-content').forEach(p=>p.classList.add('hidden'));
+  const panel = document.getElementById('adm-tab-'+tab);
+  if(panel) panel.classList.remove('hidden');
+  // NO automatic data loading — user must click refresh
+  if(tab==='qr' && (!qrSources || !qrSources.length)) loadQRSources();
+  if(tab==='emerg') loadEmergencyStatus();
+}
+
+// ── EMERGENCY EXTENSION FUNCTIONS ─────────────────────────────────────
+async function loadEmergencyStatus(){
+  const el=document.getElementById('emerg-status');
+  if(!el) return;
+  try{
+    const mainSnap=await window.DB.getDoc_("sequences","main");
+    const extSnap=await window.DB.getDoc_("sequences","emergency");
+    const mainLen=mainSnap?(mainSnap.prizes||[]).length:0;
+    const extLen=extSnap?(extSnap.prizes||[]).length:0;
+    
+    // Conta giocate effettive
+    const allAsgn=await window.DB.getAllAssignments();
+    const realCount=allAsgn.filter(a=>!a._ref&&!a.isTest).length;
+    
+    const baseDone=Math.min(realCount,mainLen);
+    const emergDone=Math.max(0,realCount-mainLen);
+    
+    el.innerHTML=`
+      <div style="margin-bottom:8px"><strong style="color:var(--w)">📊 Stato attuale:</strong></div>
+      <div style="margin-bottom:4px">• Sequenza principale: <strong style="color:var(--w)">${baseDone}/${mainLen}</strong> ${baseDone>=mainLen&&mainLen>0?'<span style="color:#f5a623">(esaurita)</span>':''}</div>
+      <div style="margin-bottom:4px">• Estensioni emergenza: <strong style="color:var(--w)">${emergDone}/${extLen}</strong></div>
+      <div style="margin-top:8px">• Totale slot disponibili: <strong style="color:#4ecdc4">${mainLen+extLen-realCount}</strong></div>
+    `;
+  }catch(e){
+    el.innerHTML='<div style="color:#f66">Errore caricamento stato</div>';
+    console.log("[Emergency] Load error:",e);
+  }
+}
+
+async function addEmergencyExtension(){
+  const total=parseInt(document.getElementById('emerg-total').value)||0;
+  const bags=parseInt(document.getElementById('emerg-bags').value)||0;
+  const msg=document.getElementById('emerg-msg');
+  
+  if(total<1){
+    msg.innerHTML='<span style="color:#f66">⚠ Inserisci almeno 1 giocata</span>';
+    return;
+  }
+  if(bags>total){
+    msg.innerHTML='<span style="color:#f66">⚠ Non puoi mettere più zaini delle giocate totali</span>';
+    return;
+  }
+  
+  const cutoffPreview=Math.floor(total*0.8);
+  const bagsPosNote=bags>0?`\n🎒 Gli zaini usciranno solo dalla posizione ${cutoffPreview+1} in poi (ultimo 20%)`:'';
+  if(!confirm(`Aggiungo ${total} giocate extra (${bags} zaini + ${total-bags} sconti)?${bagsPosNote}\n\nQuesta azione non si può annullare.`)){
+    return;
+  }
+  
+  msg.innerHTML='<span style="color:#aaa">Generazione in corso...</span>';
+  
+  try{
+    // Carica eventuale estensione esistente per concatenare
+    const existing=await window.DB.getDoc_("sequences","emergency");
+    const existingPrizes=existing?(existing.prizes||[]):[];
+    
+    // ═══════════════════════════════════════════════════════════════
+    // GENERAZIONE SLOT CON ZAINI POSIZIONATI NELL'ULTIMO 20%
+    // ═══════════════════════════════════════════════════════════════
+    const discountCount=total-bags;
+    
+    // Crea oggetti base
+    const bagObj={name:'Zaino Evora',emoji:'🎒',value:59,type:'prize'};
+    const discountObj={
+      name:'Sconto 15%',
+      emoji:'🎟️',
+      value:0,
+      type:'discount',
+      discountCode:'EVORAFIERA15'
+    };
+    
+    // Divisione in due zone:
+    // - Prima zona (80%): solo sconti
+    // - Seconda zona (ultimo 20%): zaini distribuiti random tra gli sconti
+    const cutoff=Math.floor(total*0.8); // posizione 80%
+    const slotsBeforeCutoff=cutoff;     // tutti sconti
+    const slotsAfterCutoff=total-cutoff; // qui dentro stanno gli zaini
+    
+    let shuffled=[];
+    
+    if(bags===0){
+      // Solo sconti, mescola tutto
+      for(let i=0;i<total;i++) shuffled.push({...discountObj});
+    } else if(bags>=slotsAfterCutoff){
+      // Caso limite: più zaini del 20% disponibile → metti tutti dopo cutoff
+      // (anche se sovrappongono il 20%)
+      for(let i=0;i<slotsBeforeCutoff;i++) shuffled.push({...discountObj});
+      // Crea l'ultimo blocco con tutti gli zaini + eventuali sconti rimanenti
+      const lastBlock=[];
+      for(let i=0;i<bags;i++) lastBlock.push({...bagObj});
+      const remainingDiscounts=slotsAfterCutoff-bags;
+      for(let i=0;i<remainingDiscounts;i++) lastBlock.push({...discountObj});
+      const seed=Date.now()%1000000;
+      shuffled=[...shuffled,...seededShuffle(lastBlock,seed)];
+    } else {
+      // Caso normale: zaini < 20% del totale
+      // Prima zona: tutti sconti (slotsBeforeCutoff slot)
+      for(let i=0;i<slotsBeforeCutoff;i++) shuffled.push({...discountObj});
+      
+      // Seconda zona (ultimo 20%): bags zaini + (slotsAfterCutoff-bags) sconti, mescolati
+      const lastBlock=[];
+      for(let i=0;i<bags;i++) lastBlock.push({...bagObj});
+      const discInLastBlock=slotsAfterCutoff-bags;
+      for(let i=0;i<discInLastBlock;i++) lastBlock.push({...discountObj});
+      
+      const seed=Date.now()%1000000;
+      const shuffledLast=seededShuffle(lastBlock,seed);
+      shuffled=[...shuffled,...shuffledLast];
+    }
+    
+    console.log("[Emergency] === DEBUG ===");
+    console.log("[Emergency] Nuovi slot da aggiungere:",total,"(",bags,"zaini +",discountCount,"sconti)");
+    console.log("[Emergency] Cutoff posizione (80%):",cutoff);
+    console.log("[Emergency] Sequenza emergency esistente:",existingPrizes.length,"slot");
+    console.log("[Emergency] Posizioni zaini nei nuovi slot:");
+    shuffled.forEach((s,i)=>{if(s.type==='prize')console.log("  → posizione",i+1,"di",shuffled.length,"=",s.name);});
+    
+    // Concatena con eventuali estensioni precedenti
+    const finalSeq=[...existingPrizes,...shuffled];
+    
+    // Salva
+    await window.DB.saveDaySequence("emergency",finalSeq);
+    
+    msg.innerHTML='<span style="color:#4ecdc4">✓ Estensione aggiunta con successo!</span>';
+    document.getElementById('emerg-total').value='';
+    document.getElementById('emerg-bags').value='1';
+    
+    // Aggiorna stato
+    setTimeout(()=>{loadEmergencyStatus();msg.innerHTML='';},2000);
+    
+  }catch(e){
+    console.error("[Emergency] Error:",e);
+    msg.innerHTML='<span style="color:#f66">❌ Errore durante il salvataggio</span>';
+  }
+}
+
+async function clearEmergencyExtensions(){
+  const msg=document.getElementById('emerg-msg');
+  if(!confirm('Cancello TUTTE le estensioni emergenza?\n\nLe giocate già effettuate restano valide, ma le posizioni future verranno azzerate.\n\nQuesta azione non si può annullare.')){
+    return;
+  }
+  msg.innerHTML='<span style="color:#aaa">Cancellazione in corso...</span>';
+  try{
+    // Salva un array vuoto al posto delle estensioni
+    await window.DB.saveDaySequence("emergency",[]);
+    msg.innerHTML='<span style="color:#4ecdc4">✓ Tutte le estensioni cancellate</span>';
+    setTimeout(()=>{loadEmergencyStatus();msg.innerHTML='';},2000);
+  }catch(e){
+    console.error("[Emergency Clear] Error:",e);
+    msg.innerHTML='<span style="color:#f66">❌ Errore</span>';
+  }
+}
+
+function renderQRSources(){
+  renderDashChips(); // keep chips in sync
+  const el = document.getElementById('qr-sources-list');
+  if(!el) return;
+  if(!qrSources.length){
+    el.innerHTML = '<div style="color:var(--g);font-size:13px;padding:12px 0">Nessun QR creato. Aggiungine uno.</div>';
+    return;
+  }
+  const formUrl = QR_BASE_URL;
+  el.innerHTML = qrSources.map((src,i)=>`
+    <div style="background:#0a0a0a;border:1px solid var(--b);padding:14px;margin-bottom:8px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+        <div style="font-family:var(--fd);font-size:15px;font-weight:700;letter-spacing:2px">${src.name}</div>
+        <button onclick="deleteQRSource(${i})" style="background:none;border:none;color:#555;cursor:pointer;font-size:16px;padding:4px 8px">✕</button>
+      </div>
+      <div style="font-size:11px;color:var(--g);margin-bottom:10px;word-break:break-all">${formUrl}?ref=${encodeURIComponent(src.id)}</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button onclick="copyQRUrl('${src.id}')" style="padding:7px 14px;background:var(--b);border:none;color:var(--w);font-family:var(--fd);font-size:11px;letter-spacing:2px;cursor:pointer">COPIA URL</button>
+        <button onclick="showQRStats('${src.id}','${src.name}')" style="padding:7px 14px;background:var(--b);border:none;color:var(--w);font-family:var(--fd);font-size:11px;letter-spacing:2px;cursor:pointer">STATISTICHE</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+function copyQRUrl(id){
+  const formUrl = QR_BASE_URL;
+  const url = `${formUrl}?ref=${encodeURIComponent(id)}`;
+  if(navigator.clipboard) navigator.clipboard.writeText(url);
+  if(navigator.vibrate) navigator.vibrate(40);
+  showMsg('qr-msg','✓ URL copiato negli appunti','ok');
+}
+
+async function addQRSource(){
+  const nameEl = document.getElementById('qr-new-name');
+  const name = nameEl ? nameEl.value.trim() : '';
+  if(!name){ showMsg('qr-msg','Inserisci un nome','err'); return; }
+  const id = name.toLowerCase().replace(/[^a-z0-9]/g,'-').replace(/-+/g,'-');
+  if(qrSources.find(s=>s.id===id)){ showMsg('qr-msg','Nome già esistente','err'); return; }
+  qrSources.push({id, name, createdAt: new Date().toISOString()});
+  await window.DB.saveConfig('qr_sources', qrSources);
+  if(nameEl) nameEl.value = '';
+  renderQRSources();
+  showMsg('qr-msg','✓ QR aggiunto','ok');
+}
+
+async function deleteQRSource(i){
+  qrSources.splice(i,1);
+  await window.DB.saveConfig('qr_sources', qrSources);
+  renderQRSources();
+}
+
+async function showQRStats(id, name){
+  const el = document.getElementById('qr-stats-panel');
+  if(!el) return;
+  el.innerHTML = '<div class="dld">Caricamento statistiche…</div>';
+  el.style.display = 'block';
+  document.getElementById('qr-stats-title').textContent = name;
+  try{
+    // Conta scansioni QR da collection qr_scans
+    const scans = await window.DB.getAllScans();
+    const filtered = scans.filter(s => s.ref === id);
+    const total = filtered.length;
+    
+    // Raggruppa per giorno
+    const byDay = {};
+    filtered.forEach(s => {
+      const date = s.timestamp ? s.timestamp.split('T')[0] : 'unknown';
+      byDay[date] = (byDay[date]||0)+1;
+    });
+    
+    document.getElementById('qr-stats-content').innerHTML = `
+      <div style="background:#0a0a0a;border:1px solid var(--b);padding:20px;text-align:center;margin-bottom:16px">
+        <div style="font-family:var(--fd);font-size:48px;font-weight:900;color:var(--w)">${total}</div>
+        <div style="font-size:12px;letter-spacing:2px;color:var(--g);margin-top:8px;text-transform:uppercase">Scansioni Totali</div>
+      </div>
+      ${Object.keys(byDay).length ? `
+        <div style="font-family:var(--fd);font-size:10px;letter-spacing:3px;color:var(--g);text-transform:uppercase;margin-bottom:8px">Scansioni per giorno</div>
+        ${Object.entries(byDay).sort((a,b)=>b[0].localeCompare(a[0])).map(([d,n])=>`
+          <div style="display:flex;justify-content:space-between;padding:8px 12px;background:#0a0a0a;border:1px solid var(--b);margin-bottom:4px;font-size:13px">
+            <span>${d}</span><span style="font-weight:700">${n}</span>
+          </div>
+        `).join('')}
+      ` : '<div style="color:var(--g);font-size:13px;margin-top:12px">Nessuna scansione ancora.</div>'}
+    `;
+  }catch(e){ 
+    console.error('[QR Stats] Error:', e);
+    document.getElementById('qr-stats-content').innerHTML = '<div style="color:#f66">Errore nel caricamento</div>'; 
+  }
+}
+
+function closeQRStats(){
+  const el = document.getElementById('qr-stats-panel');
+  if(el) el.style.display='none';
+}
+
+// ── ACCESS MENU (5 logo taps) ─────────────────────────────────────────────
+let logoTapCount = 0;
+let logoTapTimer = null;
+function handleLogoTap(){
+  logoTapCount++;
+  if(logoTapTimer) clearTimeout(logoTapTimer);
+  logoTapTimer = setTimeout(()=>{ logoTapCount = 0; }, 2000);
+  if(logoTapCount >= 5){
+    logoTapCount = 0;
+    if(navigator.vibrate) navigator.vibrate([20,40,40]);
+    document.getElementById('access-menu').style.display = 'flex';
+  }
+}
+function closeAccessMenu(e){
+  if(e && e.target && e.target.id !== 'access-menu' && e.type === 'click') return;
+  document.getElementById('access-menu').style.display = 'none';
+}
+function goToStaff(){
+  closeAccessMenu();
+  window.location.hash = '#staff';
+  showLoginStaff();
+}
+function goToAdmin(){
+  closeAccessMenu();
+  window.location.hash = '#admin';
+  showLoginAdmin();
+}
+document.addEventListener('keydown', e=>{ if(e.key==='Escape') closeAccessMenu(); });
+</script>
+
+<!-- Access menu (5 taps on logo to reveal) -->
+<div id="access-menu" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);backdrop-filter:blur(8px);z-index:9999;align-items:center;justify-content:center;padding:24px" onclick="closeAccessMenu(event)">
+  <div style="background:#0f0f0f;border:1px solid #2a2a2a;padding:24px;max-width:320px;width:100%;position:relative" onclick="event.stopPropagation()">
+    <div style="position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent,#B22222,transparent)"></div>
+    <div style="font-family:'Barlow Condensed',sans-serif;font-size:10px;letter-spacing:5px;color:#666;text-transform:uppercase;text-align:center;margin-bottom:6px">Accesso Riservato</div>
+    <div style="font-family:'Barlow Condensed',sans-serif;font-size:22px;font-weight:800;letter-spacing:3px;text-align:center;color:#f0ede8;text-transform:uppercase;margin-bottom:20px">Gestione</div>
+    <button onclick="goToStaff()" style="width:100%;padding:14px;background:rgba(255,255,255,.04);border:1px solid #2a2a2a;color:#f0ede8;font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:700;letter-spacing:3px;text-transform:uppercase;cursor:pointer;margin-bottom:10px">Staff</button>
+    <button onclick="goToAdmin()" style="width:100%;padding:14px;background:rgba(255,255,255,.04);border:1px solid #2a2a2a;color:#f0ede8;font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:700;letter-spacing:3px;text-transform:uppercase;cursor:pointer;margin-bottom:14px">Admin</button>
+    <button onclick="closeAccessMenu()" style="width:100%;padding:10px;background:transparent;border:none;color:#555;font-family:'Barlow Condensed',sans-serif;font-size:11px;letter-spacing:3px;text-transform:uppercase;cursor:pointer">Annulla</button>
+  </div>
+</div>
+
+
+<!-- REGULATION ANCHOR: visibile solo quando si scrolla in fondo -->
+<div id="reg-anchor" style="height:1px;background:transparent"></div>
+
+<div id="reg-footer-btn" style="display:none;text-align:center;padding:32px 0 48px;background:#000">
+  <button onclick="openRegModal()" style="background:none;border:none;color:#444;font-family:var(--fd);font-size:11px;letter-spacing:3px;text-transform:uppercase;cursor:pointer;padding:8px 16px;border-bottom:1px solid #2a2a2a">
+    Regolamento
+  </button>
+</div>
+
+<!-- REGULATION MODAL -->
+<div id="reg-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.92);backdrop-filter:blur(8px);z-index:9999;overflow-y:auto;-webkit-overflow-scrolling:touch">
+  <div style="max-width:680px;margin:0 auto;padding:32px 20px 80px">
+    
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:32px;position:sticky;top:0;background:rgba(0,0,0,.95);padding:16px 0;border-bottom:1px solid #1a1a1a">
+      <div style="font-family:var(--fd);font-size:13px;letter-spacing:3px;color:var(--w);text-transform:uppercase">Regolamento</div>
+      <button onclick="closeRegModal()" style="background:none;border:none;color:#666;font-size:20px;cursor:pointer;padding:4px 8px;line-height:1">✕</button>
+    </div>
+
+    <h1 style="font-family:var(--fd);font-size:18px;font-weight:800;letter-spacing:2px;text-transform:uppercase;color:var(--w);margin:0 0 6px">REGOLAMENTO – INIZIATIVA PROMOZIONALE EVORΛ FITNESS</h1>
+    <p style="font-family:var(--fs);font-size:12px;color:var(--g);margin:0 0 32px">Rimini Wellness 2026 | 28–31 maggio 2026</p>
+
+    <div id="reg-modal-body" style="font-family:var(--fs);font-size:14px;line-height:1.75;color:#ccc">
+
+      <h2 style="font-family:var(--fd);font-size:13px;letter-spacing:2px;text-transform:uppercase;color:var(--red);margin:28px 0 10px;padding-top:24px;border-top:1px solid #1a1a1a">1. Organizzatore</h2>
+      <p>L'iniziativa promozionale è organizzata da <strong style="color:var(--w)">EVORΛ Fitness</strong>.<br>Ragione sociale: Mazzeo Francesco.<br>Contatti ufficiali: <a href="mailto:info@evorafitness.it" style="color:var(--red)">info@evorafitness.it</a></p>
+
+      <h2 style="font-family:var(--fd);font-size:13px;letter-spacing:2px;text-transform:uppercase;color:var(--red);margin:28px 0 10px;border-top:1px solid #1a1a1a;padding-top:24px">2. Denominazione iniziativa</h2>
+      <p>Iniziativa promozionale EVORΛ Fitness – Rimini Wellness 2026.</p>
+
+      <h2 style="font-family:var(--fd);font-size:13px;letter-spacing:2px;text-transform:uppercase;color:var(--red);margin:28px 0 10px;border-top:1px solid #1a1a1a;padding-top:24px">3. Periodo di svolgimento</h2>
+      <p>L'iniziativa si svolgerà durante Rimini Wellness 2026 nelle giornate del <strong style="color:var(--w)">28, 29, 30 e 31 maggio 2026</strong>, presso lo stand EVORΛ Fitness.</p>
+
+      <h2 style="font-family:var(--fd);font-size:13px;letter-spacing:2px;text-transform:uppercase;color:var(--red);margin:28px 0 10px;border-top:1px solid #1a1a1a;padding-top:24px">4. Destinatari</h2>
+      <p>La partecipazione è riservata ai visitatori presenti in fiera di età pari o superiore a <strong style="color:var(--w)">16 anni</strong>.</p>
+
+      <h2 style="font-family:var(--fd);font-size:13px;letter-spacing:2px;text-transform:uppercase;color:var(--red);margin:28px 0 10px;border-top:1px solid #1a1a1a;padding-top:24px">5. Modalità di partecipazione</h2>
+      <p>Per partecipare è necessario:</p>
+      <ul style="padding-left:20px;margin:10px 0">
+        <li style="margin-bottom:6px">scansionare il QR code presente presso lo stand EVORΛ Fitness;</li>
+        <li style="margin-bottom:6px">compilare il form digitale con dati validi;</li>
+        <li style="margin-bottom:6px">confermare l'indirizzo email indicato;</li>
+        <li style="margin-bottom:6px">accedere all'esperienza digitale dedicata.</li>
+      </ul>
+      <p>Ogni partecipante potrà effettuare <strong style="color:var(--w)">una sola partecipazione</strong> per indirizzo email valido.</p>
+      <p>L'organizzatore si riserva il diritto di limitare o annullare partecipazioni duplicate, fraudolente, automatizzate o non conformi allo spirito dell'iniziativa.</p>
+
+      <h2 style="font-family:var(--fd);font-size:13px;letter-spacing:2px;text-transform:uppercase;color:var(--red);margin:28px 0 10px;border-top:1px solid #1a1a1a;padding-top:24px">6. Sistema di assegnazione degli omaggi</h2>
+      <p>Gli omaggi promozionali vengono assegnati secondo una <strong style="color:var(--w)">sequenza predeterminata</strong> definita dall'organizzatore prima dell'inizio dell'iniziativa.</p>
+      <p>L'assegnazione non dipende da elementi casuali, estrazioni o meccanismi di sorte.</p>
+      <p>La sequenza completa viene definita digitalmente prima dell'inizio dell'iniziativa e conservata ai fini organizzativi e di verifica interna.</p>
+
+      <h2 style="font-family:var(--fd);font-size:13px;letter-spacing:2px;text-transform:uppercase;color:var(--red);margin:28px 0 10px;border-top:1px solid #1a1a1a;padding-top:24px">7. Omaggi promozionali</h2>
+      <p>Gli omaggi promozionali previsti per l'iniziativa includono:</p>
+      <ul style="padding-left:20px;margin:10px 0">
+        <li style="margin-bottom:6px">Zaini EVORΛ</li>
+        <li style="margin-bottom:6px">T-shirt EVORΛ</li>
+        <li style="margin-bottom:6px">Accessori allenamento EVORΛ</li>
+        <li style="margin-bottom:6px">Sacchetti EVORΛ</li>
+        <li style="margin-bottom:6px">Buoni sconto</li>
+        <li style="margin-bottom:6px">Altro materiale promozionale</li>
+      </ul>
+      <p>L'organizzatore si riserva la possibilità di sostituire specifici omaggi con materiali promozionali equivalenti disponibili presso lo stand.</p>
+
+      <h2 style="font-family:var(--fd);font-size:13px;letter-spacing:2px;text-transform:uppercase;color:var(--red);margin:28px 0 10px;border-top:1px solid #1a1a1a;padding-top:24px">8. Consegna degli omaggi</h2>
+      <p>Gli omaggi vengono consegnati <strong style="color:var(--w)">esclusivamente presso lo stand EVORΛ Fitness</strong> durante il periodo dell'iniziativa.</p>
+      <p>Per il ritiro potrà essere richiesta:</p>
+      <ul style="padding-left:20px;margin:10px 0">
+        <li style="margin-bottom:6px">validazione da parte dello staff autorizzato;</li>
+        <li style="margin-bottom:6px">esibizione della schermata di conferma digitale;</li>
+        <li style="margin-bottom:6px">verifica della partecipazione registrata.</li>
+      </ul>
+      <p>Gli omaggi non sono convertibili in denaro.</p>
+
+      <h2 style="font-family:var(--fd);font-size:13px;letter-spacing:2px;text-transform:uppercase;color:var(--red);margin:28px 0 10px;border-top:1px solid #1a1a1a;padding-top:24px">9. Disponibilità degli omaggi</h2>
+      <p>L'iniziativa è valida <strong style="color:var(--w)">fino a disponibilità degli omaggi promozionali</strong> previsti.</p>
+      <p>In caso di esaurimento di specifiche categorie di omaggio, il sistema potrà continuare a distribuire materiali promozionali alternativi, buoni sconto o omaggi equivalenti disponibili presso lo stand.</p>
+
+      <h2 style="font-family:var(--fd);font-size:13px;letter-spacing:2px;text-transform:uppercase;color:var(--red);margin:28px 0 10px;border-top:1px solid #1a1a1a;padding-top:24px">10. Limitazioni e responsabilità</h2>
+      <p>L'organizzatore non potrà essere ritenuto responsabile per:</p>
+      <ul style="padding-left:20px;margin:10px 0">
+        <li style="margin-bottom:6px">problemi tecnici;</li>
+        <li style="margin-bottom:6px">malfunzionamenti temporanei della piattaforma;</li>
+        <li style="margin-bottom:6px">indisponibilità della rete internet;</li>
+        <li style="margin-bottom:6px">incompatibilità del dispositivo utilizzato;</li>
+        <li style="margin-bottom:6px">errori di compilazione da parte del partecipante;</li>
+        <li style="margin-bottom:6px">mancata ricezione delle email dovuta a provider, spam o indirizzi errati;</li>
+        <li style="margin-bottom:6px">interruzioni dovute a cause di forza maggiore.</li>
+      </ul>
+      <p>L'organizzatore si riserva il diritto di sospendere, modificare o interrompere l'iniziativa in qualsiasi momento per esigenze tecniche, organizzative o di sicurezza.</p>
+
+      <h2 style="font-family:var(--fd);font-size:13px;letter-spacing:2px;text-transform:uppercase;color:var(--red);margin:28px 0 10px;border-top:1px solid #1a1a1a;padding-top:24px">11. Trattamento dei dati personali</h2>
+      <p>La partecipazione all'iniziativa comporta il trattamento dei dati personali forniti dal partecipante.</p>
+      <p>I dati raccolti potranno essere utilizzati per:</p>
+      <ul style="padding-left:20px;margin:10px 0">
+        <li style="margin-bottom:6px">gestione dell'iniziativa;</li>
+        <li style="margin-bottom:6px">verifica delle partecipazioni;</li>
+        <li style="margin-bottom:6px">invio di comunicazioni informative e promozionali;</li>
+        <li style="margin-bottom:6px">attività marketing collegate al brand EVORΛ Fitness.</li>
+      </ul>
+      <p>Le informative privacy complete sono disponibili su: <a href="https://evorafitness.it" target="_blank" style="color:var(--red)">https://evorafitness.it</a></p>
+
+      <h2 style="font-family:var(--fd);font-size:13px;letter-spacing:2px;text-transform:uppercase;color:var(--red);margin:28px 0 10px;border-top:1px solid #1a1a1a;padding-top:24px">12. Accettazione del regolamento</h2>
+      <p>La partecipazione all'iniziativa implica l'accettazione del presente regolamento.</p>
+
+      <h2 style="font-family:var(--fd);font-size:13px;letter-spacing:2px;text-transform:uppercase;color:var(--red);margin:28px 0 10px;border-top:1px solid #1a1a1a;padding-top:24px">13. Informazioni e contatti</h2>
+      <p>Per informazioni relative all'iniziativa:<br>
+      <a href="mailto:info@evorafitness.it" style="color:var(--red)">info@evorafitness.it</a></p>
+
+    </div>
+  </div>
+</div>
+
+<script>
+// Mostra il pulsante "Regolamento" solo quando si arriva in fondo
+const _regObs = new IntersectionObserver((entries)=>{
+  entries.forEach(e=>{
+    if(e.isIntersecting){
+      document.getElementById('reg-footer-btn').style.display='block';
+    }
+  });
+},{threshold:0.1});
+const _regAnchor = document.getElementById('reg-anchor');
+if(_regAnchor) _regObs.observe(_regAnchor);
+
+function openRegModal(){
+  document.getElementById('reg-modal').style.display='block';
+  document.body.style.overflow='hidden';
+  document.addEventListener('keydown',_regEsc);
+}
+function closeRegModal(){
+  document.getElementById('reg-modal').style.display='none';
+  document.body.style.overflow='';
+  document.removeEventListener('keydown',_regEsc);
+}
+function _regEsc(e){ if(e.key==='Escape') closeRegModal(); }
+</script>
+
+</body>
+
+
+<div id="access-menu" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);backdrop-filter:blur(8px);z-index:9999;align-items:center;justify-content:center;padding:24px" onclick="closeAccessMenu(event)">
+  <div style="background:#0f0f0f;border:1px solid #2a2a2a;padding:24px;max-width:320px;width:100%;position:relative" onclick="event.stopPropagation()">
+    <div style="position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent,#B22222,transparent)"></div>
+    <div style="font-family:'Barlow Condensed',sans-serif;font-size:10px;letter-spacing:5px;color:#666;text-transform:uppercase;text-align:center;margin-bottom:6px">Accesso Riservato</div>
+    <div style="font-family:'Barlow Condensed',sans-serif;font-size:22px;font-weight:800;letter-spacing:3px;text-align:center;color:#f0ede8;text-transform:uppercase;margin-bottom:20px">Gestione</div>
+    <button onclick="goToStaff()" style="width:100%;padding:14px;background:rgba(255,255,255,.04);border:1px solid #2a2a2a;color:#f0ede8;font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:700;letter-spacing:3px;text-transform:uppercase;cursor:pointer;margin-bottom:10px">Staff</button>
+    <button onclick="goToAdmin()" style="width:100%;padding:14px;background:rgba(255,255,255,.04);border:1px solid #2a2a2a;color:#f0ede8;font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:700;letter-spacing:3px;text-transform:uppercase;cursor:pointer;margin-bottom:14px">Admin</button>
+    <button onclick="closeAccessMenu()" style="width:100%;padding:10px;background:transparent;border:none;color:#555;font-family:'Barlow Condensed',sans-serif;font-size:11px;letter-spacing:3px;text-transform:uppercase;cursor:pointer">Annulla</button>
+  </div>
+</div>
+
+</html>
