@@ -179,18 +179,15 @@
           + '</div>';
         document.body.appendChild(menu);
         
-        document.getElementById('goMyQRBtn').addEventListener('click', function(){
-          window.location.replace(window.location.pathname + '#myqr');
-          setTimeout(function(){ window.location.reload(); }, 50);
-        });
-        document.getElementById('goStaffBtn').addEventListener('click', function(){
-          window.location.replace(window.location.pathname + '#staff');
-          setTimeout(function(){ window.location.reload(); }, 50);
-        });
-        document.getElementById('goAdminBtn').addEventListener('click', function(){
-          window.location.replace(window.location.pathname + '#admin');
-          setTimeout(function(){ window.location.reload(); }, 50);
-        });
+        // Funzione navigazione: cambia URL COMPLETO (senza ?ref=) e forza reload
+        function goTo(hash){
+          // Costruisce URL pulito: solo origin + pathname + hash (NO search params)
+          var cleanUrl = window.location.origin + window.location.pathname + hash;
+          window.location.replace(cleanUrl);
+        }
+        document.getElementById('goMyQRBtn').addEventListener('click', function(){ goTo('#myqr'); });
+        document.getElementById('goStaffBtn').addEventListener('click', function(){ goTo('#staff'); });
+        document.getElementById('goAdminBtn').addEventListener('click', function(){ goTo('#admin'); });
         document.getElementById('cancelAccessBtn').addEventListener('click', function(){
           menu.remove();
         });
@@ -984,6 +981,7 @@
     
     <!-- Status aggiornamento -->
     <div id="ranking-status" style="font-family:var(--fs);font-size:13px;color:#666;margin-bottom:20px;text-align:center"></div>
+    <div id="ranking-debug" style="font-family:monospace;font-size:11px;color:#f5a623;background:#111;padding:12px;margin-bottom:16px;width:100%;max-width:480px;box-sizing:border-box;word-break:break-all;display:none"></div>
     
     <!-- Pulsante aggiorna -->
     <button id="ranking-refresh-btn" onclick="refreshRanking()" style="background:#B22222;color:#fff;border:none;font-family:var(--fd);font-size:13px;letter-spacing:3px;text-transform:uppercase;padding:16px 32px;cursor:pointer;width:100%;max-width:480px;margin-bottom:16px">
@@ -1523,6 +1521,11 @@ let _rankingTimer = null;
 
 function showRanking(){
   hideAll();
+  // Mostra pannello debug se URL ha ?debug
+  setTimeout(()=>{
+    const dbgEl = document.getElementById('ranking-debug');
+    if(dbgEl && window.location.search.includes('debug')) dbgEl.style.display='block';
+  },100);
   const e = document.getElementById('pg-ranking');
   e.classList.remove('hidden');
   e.style.display = 'flex';
@@ -1581,10 +1584,14 @@ async function refreshRanking(){
   btn.textContent = '⏳ Aggiornamento...';
   status.textContent = '';
   
+  // Pannello debug visivo (visibile su mobile senza DevTools)
+  const debugEl = document.getElementById('ranking-debug');
+  function dbg(msg){ if(debugEl) debugEl.innerHTML += '<div>' + msg + '</div>'; console.log(msg); }
+  if(debugEl) debugEl.innerHTML = '';
+  
   try{
-    console.log('[Ranking] Fetching leaderboard...');
-    console.log('[Ranking] window.DB available:', !!window.DB);
-    console.log('[Ranking] window.DB.getDoc_ available:', !!(window.DB && window.DB.getDoc_));
+    dbg('DB: ' + (window.DB ? 'OK' : 'MANCANTE'));
+    dbg('getDoc_: ' + (window.DB?.getDoc_ ? 'OK' : 'MANCANTE'));
     
     if(!window.DB || !window.DB.getDoc_){
       throw new Error('Firebase DB non ancora pronto');
@@ -1596,8 +1603,8 @@ async function refreshRanking(){
       window.DB.getConfig('qr_sources')
     ]);
     
-    console.log('[Ranking] Leaderboard:', lb);
-    console.log('[Ranking] QR Sources:', sources);
+    dbg('LB: ' + JSON.stringify(lb));
+    dbg('Sources: ' + JSON.stringify(sources));
     
     const scores = lb || {};
     
@@ -1614,7 +1621,7 @@ async function refreshRanking(){
       if(!(k in data) && k !== 'savedAt') data[k] = v;
     });
     
-    console.log('[Ranking] Final data:', data);
+    dbg('Final: ' + JSON.stringify(data));
     
     // Salva in cache
     const nextUpdate = setRankingCache(data);
