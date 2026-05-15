@@ -86,7 +86,7 @@
         + '@keyframes fadeUp{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}'
         + '@keyframes pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.04)}}'
         + 'html,body{margin:0;padding:0;background:#0a0a0a !important;font-family:Barlow,sans-serif;min-height:100vh}'
-        + 'body > *:not(#ig-gate):not(#access-overlay):not(#myqr-login-overlay){display:none !important}' // nasconde tutto del body originale
+        + 'body > *:not(#ig-gate):not(#access-overlay):not(#myqr-login-overlay):not(#ranking-overlay){display:none !important}' // nasconde tutto del body originale
         + '#ig-gate{display:block !important;position:fixed;top:0;left:0;right:0;bottom:0;background:#0a0a0a;z-index:999999;overflow-y:auto}'
         + '.ig-wrap{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;padding:20px 24px 40px;text-align:center;color:#f0ede8;box-sizing:border-box}'
         + '.ig-eyebrow{font-family:Barlow Condensed,sans-serif;font-size:12px;letter-spacing:5px;color:#B22222;text-transform:uppercase;margin-bottom:24px;font-weight:700;animation:fadeUp .6s ease-out}'
@@ -221,9 +221,7 @@
           document.getElementById('myqr-ol-back2').addEventListener('click', function(){ overlay.remove(); });
           document.getElementById('myqr-ol-ranking').addEventListener('click', function(){
             window._myQRSrc = match;
-            overlay.remove();
-            // Naviga alla pagina ranking senza ?ref= e senza gate
-            window.location.replace(window.location.origin + window.location.pathname + '#ranking');
+            showRankingOverlay(match, overlay);
           });
         }
         
@@ -266,6 +264,141 @@
         showLoginForm();
       }
       
+      
+      // Ranking come overlay sopra tutto
+      async function showRankingOverlay(src, parentOverlay){
+        var ro = document.createElement('div');
+        ro.id = 'ranking-overlay';
+        ro.style.cssText = 'position:fixed;inset:0;background:#0a0a0a;z-index:99999999;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;padding:24px 16px 40px;box-sizing:border-box;overflow-y:auto';
+        ro.innerHTML = ''
+          + '<div style="width:100%;max-width:480px;text-align:center;margin-bottom:24px">'
+          + '<div style="font-family:Barlow Condensed,sans-serif;font-size:11px;letter-spacing:5px;color:#B22222;text-transform:uppercase;margin-bottom:8px">RIMINI WELLNESS 2026</div>'
+          + '<div style="font-family:Barlow Condensed,sans-serif;font-size:28px;font-weight:800;letter-spacing:2px;text-transform:uppercase;color:#f0ede8">🏆 CLASSIFICA</div>'
+          + '</div>'
+          + '<div id="ro-list" style="width:100%;max-width:480px;margin-bottom:24px"><div style="color:#666;text-align:center;padding:40px">Clicca AGGIORNA</div></div>'
+          + '<div id="ro-status" style="font-size:13px;color:#666;margin-bottom:16px;text-align:center;font-family:Barlow,sans-serif"></div>'
+          + '<button id="ro-refresh" style="width:100%;max-width:480px;background:#B22222;color:#fff;border:none;font-family:Barlow Condensed,sans-serif;font-size:13px;letter-spacing:3px;text-transform:uppercase;padding:16px;cursor:pointer;margin-bottom:8px">🔄 AGGIORNA</button>'
+          + '<div id="ro-countdown" style="font-size:12px;color:#555;letter-spacing:2px;text-align:center;margin-bottom:24px;font-family:Barlow Condensed,sans-serif"></div>'
+          + '<button id="ro-back" style="background:transparent;border:none;color:#555;font-family:Barlow Condensed,sans-serif;font-size:11px;letter-spacing:3px;text-transform:uppercase;padding:10px;cursor:pointer">← IL MIO QR</button>';
+        document.body.appendChild(ro);
+        
+        var roTimer = null;
+        var COOLDOWN = 60000;
+        var LS_KEY = 'evora_ranking_cache';
+        
+        function getRankingCache(){
+          try{
+            var raw = localStorage.getItem(LS_KEY);
+            if(!raw) return null;
+            var p = JSON.parse(raw);
+            return (p.nextUpdate && Date.now() < p.nextUpdate) ? p : null;
+          }catch(e){ return null; }
+        }
+        
+        function setRankingCache(data){
+          var nextUpdate = Date.now() + COOLDOWN;
+          try{ localStorage.setItem(LS_KEY, JSON.stringify({data:data, nextUpdate:nextUpdate})); }catch(e){}
+          return nextUpdate;
+        }
+        
+        function renderList(data){
+          var el = document.getElementById('ro-list');
+          if(!el) return;
+          var entries = Object.entries(data).filter(function(e){ return e[0] !== 'savedAt' && typeof e[1] === 'number'; }).sort(function(a,b){ return b[1]-a[1]; });
+          if(!entries.length){ el.innerHTML='<div style="color:#666;text-align:center;padding:40px;font-family:Barlow,sans-serif">Nessuna giocata ancora</div>'; return; }
+          var medals = ['🥇','🥈','🥉'];
+          el.innerHTML = entries.map(function(e,i){
+            return '<div style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px;margin-bottom:8px;background:'+(i<3?'rgba(178,34,34,.08)':'#0f0f0f')+';border:1px solid '+(i<3?'#B22222':'#1a1a1a')+';border-radius:4px">'
+              +'<div style="display:flex;align-items:center;gap:12px">'
+              +'<span style="font-family:Barlow Condensed,sans-serif;font-size:13px;color:#555;min-width:20px">'+(medals[i]||(i+1)+'.')+' </span>'
+              +'<span style="font-family:Barlow Condensed,sans-serif;font-size:16px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:#f0ede8">'+e[0]+'</span>'
+              +'</div>'
+              +'<span style="font-family:Barlow Condensed,sans-serif;font-size:22px;font-weight:800;color:'+(i<3?'#B22222':'#f0ede8')+'">'+e[1]+'</span>'
+              +'</div>';
+          }).join('');
+        }
+        
+        function startCountdown(nextUpdate){
+          if(roTimer) clearInterval(roTimer);
+          var btn = document.getElementById('ro-refresh');
+          var cd = document.getElementById('ro-countdown');
+          function tick(){
+            var rem = nextUpdate - Date.now();
+            if(rem <= 0){
+              clearInterval(roTimer);
+              if(btn){ btn.disabled=false; btn.style.opacity='1'; }
+              if(cd) cd.textContent='';
+              return;
+            }
+            var s = Math.ceil(rem/1000);
+            if(btn){ btn.disabled=true; btn.style.opacity='0.4'; }
+            if(cd) cd.textContent = 'Prossimo aggiornamento tra '+(s>60?Math.floor(s/60)+':'+(s%60).toString().padStart(2,'0'):s+'s');
+          }
+          tick();
+          roTimer = setInterval(tick, 1000);
+        }
+        
+        async function doRefresh(){
+          var btn = document.getElementById('ro-refresh');
+          var status = document.getElementById('ro-status');
+          var cached = getRankingCache();
+          if(cached){ renderList(cached.data); startCountdown(cached.nextUpdate); return; }
+          if(btn){ btn.disabled=true; btn.textContent='⏳'; }
+          try{
+            var PROJ='evora-fiera', KEY='AIzaSyBeHgXy0V1YqIWP8HruIZ4rztIaNfXsUxk';
+            // Leggi leaderboard via REST
+            var lbResp = await fetch('https://firestore.googleapis.com/v1/projects/'+PROJ+'/databases/(default)/documents/config/leaderboard?key='+KEY);
+            var lbData = await lbResp.json();
+            // Leggi qr_sources via REST
+            var srcResp = await fetch('https://firestore.googleapis.com/v1/projects/'+PROJ+'/databases/(default)/documents/config/qr_sources?key='+KEY);
+            var srcData = await srcResp.json();
+            
+            // Costruisci scores
+            var scores = {};
+            if(lbData.fields){
+              Object.entries(lbData.fields).forEach(function(e){
+                var v = e[1].integerValue || e[1].doubleValue;
+                if(v !== undefined) scores[e[0]] = parseInt(v);
+              });
+            }
+            
+            // Tutti gli influencer (anche a 0)
+            var data = {};
+            if(srcData.fields&&srcData.fields.value&&srcData.fields.value.arrayValue){
+              (srcData.fields.value.arrayValue.values||[]).forEach(function(item){
+                if(item.mapValue&&item.mapValue.fields){
+                  var f=item.mapValue.fields;
+                  var id=(f.id&&f.id.stringValue)||'';
+                  if(id) data[id] = scores[id]||0;
+                }
+              });
+            }
+            Object.entries(scores).forEach(function(e){ if(!(e[0] in data)) data[e[0]]=e[1]; });
+            
+            var nextUpdate = setRankingCache(data);
+            renderList(data);
+            startCountdown(nextUpdate);
+            var now = new Date();
+            if(status) status.textContent='Aggiornato alle '+now.getHours().toString().padStart(2,'0')+':'+now.getMinutes().toString().padStart(2,'0');
+            if(btn){ btn.disabled=false; btn.textContent='🔄 AGGIORNA'; }
+          }catch(e){
+            console.error('[Ranking overlay]',e);
+            if(status) status.textContent='Errore: '+e.message;
+            if(btn){ btn.disabled=false; btn.textContent='🔄 AGGIORNA'; btn.style.opacity='1'; }
+          }
+        }
+        
+        document.getElementById('ro-refresh').addEventListener('click', doRefresh);
+        document.getElementById('ro-back').addEventListener('click', function(){
+          if(roTimer) clearInterval(roTimer);
+          ro.remove();
+        });
+        
+        // Aggiorna CSS per mostrare questo overlay
+        var css = document.createElement('style');
+        css.textContent = '#ranking-overlay{display:flex!important}';
+        document.head.appendChild(css);
+      }
       
       // Menu accesso visivo (DEFINITO PRIMA del listener!)
       function showAccessMenu(){
