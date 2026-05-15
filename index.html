@@ -168,27 +168,65 @@
         });
       }
       
-      // Login MyQR come overlay sopra il gate (senza ricaricare)
+      // Login MyQR come overlay sopra il gate (senza ricaricare MAI)
       function showMyQRLoginOverlay(){
         var overlay = document.createElement('div');
         overlay.id = 'myqr-login-overlay';
-        overlay.style.cssText = 'position:fixed;inset:0;background:#0a0a0a;z-index:9999999;display:flex;align-items:center;justify-content:center;padding:24px;box-sizing:border-box';
-        overlay.innerHTML = ''
-          + '<div style="width:100%;max-width:360px;text-align:center">'
-          + '<div style="font-family:Barlow Condensed,sans-serif;font-size:11px;letter-spacing:4px;color:#666;text-transform:uppercase;margin-bottom:24px">Il tuo QR personale</div>'
-          + '<div style="font-family:Barlow Condensed,sans-serif;font-size:13px;letter-spacing:2px;color:#888;text-transform:uppercase;margin-bottom:12px;text-align:left">Nome utente</div>'
-          + '<input id="myqr-ol-input" type="text" placeholder="Inserisci il tuo nome" autocapitalize="off" autocomplete="off" style="width:100%;padding:16px;background:#111;border:1px solid #2a2a2a;color:#f0ede8;font-family:Barlow,sans-serif;font-size:16px;box-sizing:border-box;margin-bottom:8px;outline:none"/>'
-          + '<div id="myqr-ol-err" style="color:#f66;font-size:13px;min-height:20px;margin-bottom:12px"></div>'
-          + '<button id="myqr-ol-btn" style="width:100%;padding:18px;background:#B22222;border:none;color:#fff;font-family:Barlow Condensed,sans-serif;font-size:14px;letter-spacing:3px;text-transform:uppercase;cursor:pointer;margin-bottom:16px">ACCEDI</button>'
-          + '<button id="myqr-ol-back" style="width:100%;padding:12px;background:transparent;border:none;color:#555;font-family:Barlow Condensed,sans-serif;font-size:11px;letter-spacing:3px;text-transform:uppercase;cursor:pointer">← Indietro</button>'
-          + '</div>';
-        document.body.appendChild(overlay);
-        setTimeout(function(){ var i=document.getElementById('myqr-ol-input'); if(i)i.focus(); },100);
+        overlay.style.cssText = 'position:fixed;inset:0;background:#0a0a0a;z-index:9999999;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;box-sizing:border-box';
         
-        // Indietro → rimuovi overlay, torna al gate
-        document.getElementById('myqr-ol-back').addEventListener('click', function(){ overlay.remove(); });
+        function showLoginForm(){
+          overlay.innerHTML = ''
+            + '<div style="width:100%;max-width:360px;text-align:center">'
+            + '<div style="font-family:Barlow Condensed,sans-serif;font-size:11px;letter-spacing:4px;color:#666;text-transform:uppercase;margin-bottom:24px">Il tuo QR personale</div>'
+            + '<div style="font-family:Barlow Condensed,sans-serif;font-size:13px;letter-spacing:2px;color:#888;text-transform:uppercase;margin-bottom:12px;text-align:left">Nome utente</div>'
+            + '<input id="myqr-ol-input" type="text" placeholder="Inserisci il tuo nome" autocapitalize="off" autocomplete="off" style="width:100%;padding:16px;background:#111;border:1px solid #2a2a2a;color:#f0ede8;font-family:Barlow,sans-serif;font-size:16px;box-sizing:border-box;margin-bottom:8px;outline:none;-webkit-appearance:none"/>'
+            + '<div id="myqr-ol-err" style="color:#f66;font-size:13px;min-height:20px;margin-bottom:12px"></div>'
+            + '<button id="myqr-ol-btn" style="width:100%;padding:18px;background:#B22222;border:none;color:#fff;font-family:Barlow Condensed,sans-serif;font-size:14px;letter-spacing:3px;text-transform:uppercase;cursor:pointer;margin-bottom:16px">ACCEDI</button>'
+            + '<button id="myqr-ol-back" style="width:100%;padding:12px;background:transparent;border:none;color:#555;font-family:Barlow Condensed,sans-serif;font-size:11px;letter-spacing:3px;text-transform:uppercase;cursor:pointer">← Indietro</button>'
+            + '</div>';
+          
+          setTimeout(function(){ var i=document.getElementById('myqr-ol-input'); if(i)i.focus(); },100);
+          document.getElementById('myqr-ol-back').addEventListener('click', function(){ overlay.remove(); });
+          document.getElementById('myqr-ol-btn').addEventListener('click', doLogin);
+          document.getElementById('myqr-ol-input').addEventListener('keydown', function(e){ if(e.key==='Enter') doLogin(); });
+        }
         
-        // Accedi
+        function showQRCode(match){
+          var url = 'https://riminiwellness26.evorafitness.it/?ref=' + encodeURIComponent(match.id);
+          overlay.innerHTML = ''
+            + '<div style="width:100%;max-width:480px;display:flex;flex-direction:column;align-items:center;justify-content:space-between;min-height:80vh;padding:16px 0;box-sizing:border-box">'
+            + '<div style="text-align:center">'
+            + '<div style="font-family:Barlow Condensed,sans-serif;font-size:11px;letter-spacing:4px;color:#666;text-transform:uppercase;margin-bottom:6px">Il tuo QR personale</div>'
+            + '<div style="font-family:Barlow Condensed,sans-serif;font-size:22px;font-weight:800;letter-spacing:2px;text-transform:uppercase;color:#f0ede8">' + (match.name||match.id) + '</div>'
+            + '</div>'
+            + '<div id="myqr-ol-qr" style="background:#fff;padding:16px;border-radius:8px;width:calc(100vw - 48px);max-width:480px;display:flex;align-items:center;justify-content:center;box-sizing:border-box"></div>'
+            + '<div style="width:100%;max-width:480px;display:flex;flex-direction:column;gap:8px">'
+            + '<button id="myqr-ol-ranking" style="width:100%;background:transparent;border:1px solid #2a2a2a;color:#888;font-family:Barlow Condensed,sans-serif;font-size:11px;letter-spacing:3px;text-transform:uppercase;padding:14px;cursor:pointer">🏆 CLASSIFICA</button>'
+            + '<button id="myqr-ol-back2" style="width:100%;background:transparent;border:none;color:#444;font-family:Barlow Condensed,sans-serif;font-size:11px;letter-spacing:2px;text-transform:uppercase;padding:10px;cursor:pointer">← Indietro</button>'
+            + '</div>'
+            + '</div>';
+          
+          // Genera QR
+          var qrContainer = document.getElementById('myqr-ol-qr');
+          if(qrContainer && typeof QRCode !== 'undefined'){
+            var qrSize = Math.min(window.innerWidth - 48, 480);
+            new QRCode(qrContainer, {text:url, width:qrSize, height:qrSize, colorDark:'#000', colorLight:'#fff', correctLevel:QRCode.CorrectLevel.M});
+            setTimeout(function(){
+              var img=qrContainer.querySelector('img'), cv=qrContainer.querySelector('canvas');
+              if(img){img.style.width='100%';img.style.height='auto';img.style.display='block';}
+              if(cv){cv.style.width='100%';cv.style.height='auto';cv.style.display='block';}
+            },50);
+          }
+          
+          document.getElementById('myqr-ol-back2').addEventListener('click', function(){ overlay.remove(); });
+          document.getElementById('myqr-ol-ranking').addEventListener('click', function(){
+            window._myQRSrc = match;
+            overlay.remove();
+            // Naviga alla pagina ranking senza ?ref= e senza gate
+            window.location.replace(window.location.origin + window.location.pathname + '#ranking');
+          });
+        }
+        
         async function doLogin(){
           var input = document.getElementById('myqr-ol-input');
           var errEl = document.getElementById('myqr-ol-err');
@@ -196,7 +234,7 @@
           var val = input ? input.value.trim() : '';
           if(!val){ if(errEl) errEl.textContent='Inserisci il tuo nome'; return; }
           if(errEl) errEl.textContent='';
-          if(btn) btn.textContent='Caricamento...';
+          if(btn){ btn.textContent='Caricamento...'; btn.disabled=true; }
           try{
             var PROJ='evora-fiera', KEY='AIzaSyBeHgXy0V1YqIWP8HruIZ4rztIaNfXsUxk';
             var resp = await fetch('https://firestore.googleapis.com/v1/projects/'+PROJ+'/databases/(default)/documents/config/qr_sources?key='+KEY);
@@ -212,18 +250,22 @@
             }
             var norm=val.toLowerCase();
             var match=sources.find(function(s){return (s.id||'').toLowerCase()===norm||(s.name||'').toLowerCase()===norm;});
-            if(!match){ if(errEl)errEl.textContent='Nome non trovato'; if(btn)btn.textContent='ACCEDI'; return; }
-            // Trovato — vai alla pagina QR
-            overlay.remove();
-            window.location.replace(window.location.origin+window.location.pathname+'?myqr='+encodeURIComponent(match.id)+'#myqr');
+            if(!match){
+              if(errEl) errEl.textContent='Nome non trovato';
+              if(btn){ btn.textContent='ACCEDI'; btn.disabled=false; }
+              return;
+            }
+            showQRCode(match);
           }catch(e){
-            if(errEl)errEl.textContent='Errore di connessione';
-            if(btn)btn.textContent='ACCEDI';
+            if(errEl) errEl.textContent='Errore di connessione';
+            if(btn){ btn.textContent='ACCEDI'; btn.disabled=false; }
           }
         }
-        document.getElementById('myqr-ol-btn').addEventListener('click', doLogin);
-        document.getElementById('myqr-ol-input').addEventListener('keydown', function(e){ if(e.key==='Enter') doLogin(); });
+        
+        document.body.appendChild(overlay);
+        showLoginForm();
       }
+      
       
       // Menu accesso visivo (DEFINITO PRIMA del listener!)
       function showAccessMenu(){
