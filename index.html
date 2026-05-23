@@ -11568,7 +11568,7 @@ function _initCUserEarly(){
     cUser = {token:uToken, customerId:uCustomerId, name:uName, email:uEmail, fingerprint:'pending', ref:uRef};
   }
 }
-let scanStream=null,scanActive=false,rtUnsub=null,admPrizes=[];
+let scanStream=null,scanActive=false,rtUnsub=null,rtPollInterval=null,admPrizes=[];
 let testModeReplay=false;  // bypasses already-played block
 let testModeDate=false;    // bypasses date check
 let selectedTestDay=-1;    // -1 = not selected, 0-3 = day index for simulation
@@ -12517,7 +12517,24 @@ function showResult(){
   new QRCode(document.getElementById('qrc'),{text:cAsgn.code,width:130,height:130,colorDark:'#0a0a0a',colorLight:'#ffffff'});
   fireParticles();
   if(navigator.vibrate)navigator.vibrate([0,80,40,160,40,80]);
-  if(!rtUnsub)rtUnsub=window.DB.listenAssignment(cUser.token,d=>{if(d.status==='delivered')showTY();});
+  // Polling ogni 5 secondi per rilevare consegna (più affidabile del realtime su mobile)
+  if(!rtUnsub){
+    // Prima prova realtime listener
+    try{
+      rtUnsub=window.DB.listenAssignment(cUser.token,d=>{if(d.status==='delivered'){if(rtPollInterval){clearInterval(rtPollInterval);rtPollInterval=null;}showTY();}});
+    }catch(e){ console.log('[Listen] Error:', e); }
+    // Polling di backup ogni 5 secondi
+    rtPollInterval = setInterval(async()=>{
+      try{
+        const asgn = await window.DB.getDoc_('assignments', cAsgn.id);
+        if(asgn && asgn.status === 'delivered'){
+          clearInterval(rtPollInterval); rtPollInterval = null;
+          if(rtUnsub){ try{rtUnsub();}catch(e){} rtUnsub=null; }
+          showTY();
+        }
+      }catch(e){}
+    }, 5000);
+  }
 }
 
 function showDiscountResult(){
@@ -12578,7 +12595,8 @@ function copyDiscountCode(code){
 }
 
 function showTY(){
-  if(rtUnsub){rtUnsub();rtUnsub=null;}
+  if(rtUnsub){try{rtUnsub();}catch(e){} rtUnsub=null;}
+  if(rtPollInterval){clearInterval(rtPollInterval); rtPollInterval=null;}
   transitionTo('pg-ty');hideFooter();
   if(navigator.vibrate)navigator.vibrate([0,100,50,200,50,100]);
 }
@@ -14110,6 +14128,3 @@ function _regEsc(e){ if(e.key==='Escape') closeRegModal(); }
 </div>
 
 </html>
-
-
-
