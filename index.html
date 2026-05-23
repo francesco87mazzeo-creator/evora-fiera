@@ -213,8 +213,16 @@
             new QRCode(qrContainer, {text:url, width:qrSize, height:qrSize, colorDark:'#000', colorLight:'#fff', correctLevel:QRCode.CorrectLevel.M});
             setTimeout(function(){
               var img=qrContainer.querySelector('img'), cv=qrContainer.querySelector('canvas');
-              if(img){img.style.width='100%';img.style.height='auto';img.style.display='block';}
-              if(cv){cv.style.width='100%';cv.style.height='auto';cv.style.display='block';}
+              // Su iOS QRCode.js genera sia canvas che img — mostra solo uno
+              if(img && cv){
+                // Preferisci img, nascondi canvas
+                img.style.width='100%'; img.style.height='auto'; img.style.display='block';
+                cv.style.display='none';
+              } else if(img){
+                img.style.width='100%'; img.style.height='auto'; img.style.display='block';
+              } else if(cv){
+                cv.style.width='100%'; cv.style.height='auto'; cv.style.display='block';
+              }
             },50);
           }
           
@@ -1991,11 +1999,18 @@ function showMyQRView(src){
       correctLevel:QRCode.CorrectLevel.M
     });
     // Forza il canvas/img generato da QRCode a riempire il container
+    // Su iOS QRCode.js genera sia canvas che img — mostra solo uno
     setTimeout(()=>{
       const img = qrContainer.querySelector('img');
       const canvas = qrContainer.querySelector('canvas');
-      if(img){ img.style.width='100%'; img.style.height='auto'; img.style.display='block'; }
-      if(canvas){ canvas.style.width='100%'; canvas.style.height='auto'; canvas.style.display='block'; }
+      if(img && canvas){
+        img.style.width='100%'; img.style.height='auto'; img.style.display='block';
+        canvas.style.display='none';
+      } else if(img){
+        img.style.width='100%'; img.style.height='auto'; img.style.display='block';
+      } else if(canvas){
+        canvas.style.width='100%'; canvas.style.height='auto'; canvas.style.display='block';
+      }
     }, 50);
   }catch(err){
     console.error('[QR]',err);
@@ -2699,6 +2714,16 @@ function showScan(){
 }
 function showList(){} // legacy stub
 async function startCam(){
+  // Chiedi permesso esplicitamente prima di avviare
+  if(navigator.permissions){
+    try{
+      const perm = await navigator.permissions.query({name:'camera'});
+      if(perm.state === 'denied'){
+        document.getElementById('scerr').innerHTML='<div class="seb">⚠ Permesso fotocamera negato. Vai in Impostazioni → Safari/Chrome → Fotocamera → Consenti, poi ricarica.</div>';
+        return;
+      }
+    }catch(e){ /* permissions API non supportata, continua */ }
+  }
   try{
     const s=await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'}});
     scanStream=s;const v=document.getElementById('scvid');v.srcObject=s;v.play();
@@ -2707,7 +2732,18 @@ async function startCam(){
       const tick=async()=>{if(!scanActive)return;if(v.readyState===4){try{const c=await det.detect(v);if(c.length>0){hdlScan(c[0].rawValue);return;}}catch{}}requestAnimationFrame(tick);};
       requestAnimationFrame(tick);
     }else{document.getElementById('scerr').innerHTML='<div class="seb">Scanner non supportato. Usa il campo manuale.</div>';}
-  }catch(e){document.getElementById('scerr').innerHTML='<div class="seb">Fotocamera non disponibile. Usa il campo manuale.</div>';}
+  }catch(e){
+    console.log('[Camera] Error:', e.name, e.message);
+    let msg = 'Fotocamera non disponibile. Usa il campo manuale.';
+    if(e.name === 'NotAllowedError'){
+      msg = '⚠ Permesso fotocamera negato. Vai nelle impostazioni del browser e consenti l\'accesso alla fotocamera, poi ricarica la pagina.';
+    } else if(e.name === 'NotFoundError'){
+      msg = '⚠ Nessuna fotocamera trovata sul dispositivo.';
+    } else if(e.name === 'NotReadableError'){
+      msg = '⚠ Fotocamera in uso da un\'altra app. Chiudi le altre app e riprova.';
+    }
+    document.getElementById('scerr').innerHTML='<div class="seb">'+msg+'</div>';
+  }
 }
 function stopCamera(){scanActive=false;if(scanStream){scanStream.getTracks().forEach(t=>t.stop());scanStream=null;}}
 function hdlMan(v){const c=v.toUpperCase().trim();if(c.length>=8){const f=allAsgn.find(a=>a.code===c);if(f)hdlScan(c);}}
