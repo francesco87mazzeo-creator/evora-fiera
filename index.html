@@ -2715,20 +2715,27 @@ function showScan(){
 }
 function showList(){} // legacy stub
 async function startCam(){
-  // Chiedi permesso esplicitamente prima di avviare
-  if(navigator.permissions){
-    try{
-      const perm = await navigator.permissions.query({name:'camera'});
-      if(perm.state === 'denied'){
-        document.getElementById('scerr').innerHTML='<div class="seb">⚠ Permesso fotocamera negato. Vai in Impostazioni → Safari/Chrome → Fotocamera → Consenti, poi ricarica.</div>';
-        return;
-      }
-    }catch(e){ /* permissions API non supportata, continua */ }
+  const errEl = document.getElementById('scerr');
+  function dbg(msg){ console.log('[Camera]', msg); if(errEl) errEl.innerHTML='<div style="color:#f5a623;font-size:12px;padding:4px">'+msg+'</div>'; }
+  
+  dbg('Avvio fotocamera...');
+  
+  // Check jsQR
+  if(typeof jsQR === 'undefined'){
+    dbg('⚠ jsQR non caricato — ricarica la pagina');
+  } else {
+    dbg('jsQR OK');
   }
+  
   try{
-    const s=await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'}});
-    scanStream=s;const v=document.getElementById('scvid');v.srcObject=s;v.play();
-    // Aggiungi canvas nascosto per jsQR
+    const s=await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment',width:{ideal:1280},height:{ideal:720}}});
+    scanStream=s;
+    const v=document.getElementById('scvid');
+    v.srcObject=s;
+    await v.play();
+    dbg('✓ Fotocamera attiva');
+    
+    // Canvas per jsQR
     let scanCanvas = document.getElementById('scan-hidden-canvas');
     if(!scanCanvas){
       scanCanvas = document.createElement('canvas');
@@ -2736,29 +2743,41 @@ async function startCam(){
       scanCanvas.style.display = 'none';
       document.body.appendChild(scanCanvas);
     }
-    const scanCtx = scanCanvas.getContext('2d');
+    const scanCtx = scanCanvas.getContext('2d', {willReadFrequently:true});
     
+    let frameCount = 0;
     const tick = async () => {
       if(!scanActive) return;
-      if(v.readyState === 4 && v.videoWidth > 0){
+      frameCount++;
+      
+      if(v.readyState >= 2 && v.videoWidth > 0){
         scanCanvas.width = v.videoWidth;
         scanCanvas.height = v.videoHeight;
-        scanCtx.drawImage(v, 0, 0, scanCanvas.width, scanCanvas.height);
+        scanCtx.drawImage(v, 0, 0);
         
-        // Prova BarcodeDetector (Chrome Android)
+        // Log ogni 60 frame
+        if(frameCount % 60 === 0){
+          const hasBD = 'BarcodeDetector' in window;
+          const hasJsQR = typeof jsQR !== 'undefined';
+          dbg('Frame '+frameCount+' | BD:'+hasBD+' jsQR:'+hasJsQR+' size:'+v.videoWidth+'x'+v.videoHeight);
+        }
+        
+        // BarcodeDetector (Chrome Android)
         if('BarcodeDetector' in window){
           try{
             const det = new BarcodeDetector({formats:['qr_code']});
             const codes = await det.detect(v);
             if(codes.length > 0){ hdlScan(codes[0].rawValue); return; }
-          }catch(e){}
+          }catch(e){ console.log('[BarcodeDetector] err:', e.message); }
         }
         
-        // Fallback jsQR (Safari + tutti gli altri)
+        // jsQR fallback
         if(typeof jsQR !== 'undefined'){
-          const imageData = scanCtx.getImageData(0, 0, scanCanvas.width, scanCanvas.height);
-          const code = jsQR(imageData.data, imageData.width, imageData.height, {inversionAttempts:'dontInvert'});
-          if(code){ hdlScan(code.data); return; }
+          try{
+            const imageData = scanCtx.getImageData(0, 0, scanCanvas.width, scanCanvas.height);
+            const code = jsQR(imageData.data, imageData.width, imageData.height, {inversionAttempts:'dontInvert'});
+            if(code){ hdlScan(code.data); return; }
+          }catch(e){ console.log('[jsQR] err:', e.message); }
         }
       }
       requestAnimationFrame(tick);
