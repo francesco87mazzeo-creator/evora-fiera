@@ -7,6 +7,7 @@
   <title>Evora — Fiera 2026</title>
   <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@300;400;500;600;700;800;900&family=Cormorant+Garamond:wght@400;600;700&display=swap" rel="stylesheet"/>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jsqr/1.4.0/jsQR.min.js"></script>
   
   <!-- ══════════════════════════════════════════════════════════════
        QR INSTAGRAM GATE - intercetta SUBITO prima del module Firebase
@@ -2727,11 +2728,42 @@ async function startCam(){
   try{
     const s=await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'}});
     scanStream=s;const v=document.getElementById('scvid');v.srcObject=s;v.play();
-    if('BarcodeDetector' in window){
-      const det=new BarcodeDetector({formats:['qr_code']});
-      const tick=async()=>{if(!scanActive)return;if(v.readyState===4){try{const c=await det.detect(v);if(c.length>0){hdlScan(c[0].rawValue);return;}}catch{}}requestAnimationFrame(tick);};
+    // Aggiungi canvas nascosto per jsQR
+    let scanCanvas = document.getElementById('scan-hidden-canvas');
+    if(!scanCanvas){
+      scanCanvas = document.createElement('canvas');
+      scanCanvas.id = 'scan-hidden-canvas';
+      scanCanvas.style.display = 'none';
+      document.body.appendChild(scanCanvas);
+    }
+    const scanCtx = scanCanvas.getContext('2d');
+    
+    const tick = async () => {
+      if(!scanActive) return;
+      if(v.readyState === 4 && v.videoWidth > 0){
+        scanCanvas.width = v.videoWidth;
+        scanCanvas.height = v.videoHeight;
+        scanCtx.drawImage(v, 0, 0, scanCanvas.width, scanCanvas.height);
+        
+        // Prova BarcodeDetector (Chrome Android)
+        if('BarcodeDetector' in window){
+          try{
+            const det = new BarcodeDetector({formats:['qr_code']});
+            const codes = await det.detect(v);
+            if(codes.length > 0){ hdlScan(codes[0].rawValue); return; }
+          }catch(e){}
+        }
+        
+        // Fallback jsQR (Safari + tutti gli altri)
+        if(typeof jsQR !== 'undefined'){
+          const imageData = scanCtx.getImageData(0, 0, scanCanvas.width, scanCanvas.height);
+          const code = jsQR(imageData.data, imageData.width, imageData.height, {inversionAttempts:'dontInvert'});
+          if(code){ hdlScan(code.data); return; }
+        }
+      }
       requestAnimationFrame(tick);
-    }else{document.getElementById('scerr').innerHTML='<div class="seb">Scanner non supportato. Usa il campo manuale.</div>';}
+    };
+    requestAnimationFrame(tick);
   }catch(e){
     console.log('[Camera] Error:', e.name, e.message);
     let msg = 'Fotocamera non disponibile. Usa il campo manuale.';
