@@ -11365,19 +11365,23 @@ function findAlignmentPattern(matrix, alignmentPatternQuads, topRight, topLeft, 
     <div style="padding:16px">
       <div style="font-family:var(--fd);font-size:10px;letter-spacing:3px;color:var(--g);text-transform:uppercase;margin-bottom:12px">Scansiona o inserisci codice premio</div>
 
-      <!-- Camera scanner -->
-      <div id="sv-scan" style="margin-bottom:16px">
-        <div class="svw" style="position:relative;background:#000;border:1px solid var(--b);margin-bottom:12px">
-          <video id="scvid" playsinline muted style="width:100%;display:block"></video>
-          <div class="sfo"><div class="srect"><div class="scbr"></div><div class="scbl"></div><div class="scln"></div></div></div>
+      <!-- Camera scanner + input sulla stessa riga -->
+      <div id="sv-scan" style="margin-bottom:12px">
+        <div style="display:flex;gap:8px;align-items:stretch;margin-bottom:8px">
+          <!-- Video compatto -->
+          <div class="svw" style="position:relative;background:#000;border:1px solid var(--b);width:140px;min-width:140px;height:140px;flex-shrink:0;overflow:hidden">
+            <video id="scvid" playsinline muted style="width:100%;height:100%;object-fit:cover;display:block"></video>
+            <div class="sfo" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center">
+              <div class="srect" style="width:80px;height:80px"><div class="scbr"></div><div class="scbl"></div><div class="scln"></div></div>
+            </div>
+          </div>
+          <!-- Input + bottone fotocamera -->
+          <div style="flex:1;display:flex;flex-direction:column;gap:8px;justify-content:center">
+            <input class="smi" placeholder="EVR-P1-XXXX" id="smin" style="flex:1;font-size:15px;width:100%" oninput="hdlMan(this.value)"/>
+            <button onclick="triggerStaffScan()" style="padding:10px;background:var(--red);border:none;color:var(--w);font-family:var(--fd);font-size:13px;letter-spacing:2px;cursor:pointer;text-transform:uppercase">📷 Fotocamera</button>
+          </div>
         </div>
-        <div id="scerr" style="margin-bottom:8px"></div>
-      </div>
-
-      <!-- Manual input -->
-      <div style="display:flex;gap:8px;margin-bottom:20px">
-        <input class="smi" placeholder="EVR-P1-XXXX" id="smin" style="flex:1;font-size:16px" oninput="hdlMan(this.value)"/>
-        <button onclick="triggerStaffScan()" style="padding:12px 16px;background:var(--red);border:none;color:var(--w);font-family:var(--fd);font-size:20px;cursor:pointer">📷</button>
+        <div id="scerr" style="margin-bottom:4px"></div>
       </div>
 
       <!-- Result card -->
