@@ -11820,6 +11820,11 @@ function showFooter(){} // footer rimosso in v24
 function hideFooter(){} // footer rimosso in v24
 
 function showWelcome(){
+  // Se l'utente ha email e nome (arriva dal link mail) → salta welcome e vai al gioco
+  if(cUser && cUser.email && cUser.name && cUser.name !== 'Ospite' && !window._welcomeForced){
+    doShowGame();
+    return;
+  }
   transitionTo('pg-welcome');stopCamera();
   if(rtUnsub){rtUnsub();rtUnsub=null;}
   const unameEl = document.getElementById('uname');
@@ -12909,7 +12914,20 @@ async function hdlScan(code){
   if(navigator.vibrate)navigator.vibrate(a?[50,100,50]:[200]);
   const ct=document.getElementById('scres');
   if(!a){ct.innerHTML=`<div class="srs"><div style="color:#ff6b6b;font-size:14px;margin-bottom:16px">❌ Codice non trovato: <code style="letter-spacing:2px">${code}</code></div><button class="sag" onclick="rstScan()">🔁 Scansiona di nuovo</button></div>`;return;}
-  if(a.status==='delivered'){ct.innerHTML=`<div class="srs"><div class="sre">${a.prizeEmoji}</div><div class="srp">${a.prizeName}</div><div class="sru">${a.userName||a.userEmail||'—'}</div><div class="src">${a.code}</div><span class="srs2" style="background:rgba(255,255,255,.06);color:#666">✓ GIÀ CONSEGNATO</span><div style="color:#555;font-size:12px;padding:8px 0 16px">Premio già consegnato in precedenza.</div><button class="sag" onclick="rstScan()">🔁 Scansiona di nuovo</button></div>`;return;}
+  if(a.status==='delivered'){
+    if(navigator.vibrate) navigator.vibrate([100,50,100,50,100]); // vibrazione alert
+    ct.innerHTML=`<div style="background:rgba(178,34,34,.15);border:2px solid #B22222;padding:24px;text-align:center;animation:pulse-border 1s ease-in-out infinite;position:relative;overflow:hidden">
+      <div style="position:absolute;inset:0;background:rgba(178,34,34,.05);animation:pulse-bg 1s ease-in-out infinite"></div>
+      <style>@keyframes pulse-bg{0%,100%{opacity:.3}50%{opacity:1}}</style>
+      <div style="font-size:48px;margin-bottom:8px">🚫</div>
+      <div style="font-family:var(--fd);font-size:32px;font-weight:800;letter-spacing:2px;color:#B22222;margin-bottom:8px">GIÀ CONSEGNATO</div>
+      <div style="font-family:var(--fd);font-size:18px;color:#f0ede8;margin-bottom:4px">${a.prizeEmoji} ${a.prizeName}</div>
+      <div style="font-size:13px;color:#aaa;margin-bottom:16px">${a.userName||a.userEmail||'—'}</div>
+      <div style="font-family:monospace;font-size:12px;color:#666;margin-bottom:20px">${a.code}</div>
+      <button class="sag" onclick="rstScan()">🔁 Scansiona di nuovo</button>
+    </div>`;
+    return;
+  }
   ct.innerHTML=`<div class="srs"><div class="sre">${a.prizeEmoji}</div><div class="srp">${a.prizeName}</div><div class="sru">${a.userName||a.userEmail||'—'}</div><div class="src">${a.code}</div><span class="srs2" style="background:rgba(178,34,34,.15);color:var(--red)">⏳ DA CONSEGNARE</span><br><button class="sdl" id="sdlbtn" onclick="scnDel('${a.userToken}')">SEGNA CONSEGNATO</button><div style="color:#555;font-size:11px;text-align:center;margin-top:10px;letter-spacing:1px;font-family:var(--fd)">CONFERMA LA CONSEGNA PRIMA DI SCANSIONARE IL PROSSIMO</div></div>`;
   document.getElementById('scvid').style.display='none';
 }
