@@ -10982,7 +10982,7 @@ function findAlignmentPattern(matrix, alignmentPatternQuads, topRight, topLeft, 
     .ty{text-align:center;padding:40px 20px}
     .tye{font-size:80px;margin-bottom:24px;animation:bnc .6s ease infinite alternate}
     @keyframes bnc{from{transform:scale(1)}to{transform:scale(1.08)}}
-    .tyt{font-family:var(--fd);font-size:56px;font-weight:800;letter-spacing:2px;text-transform:uppercase;line-height:.95;margin-bottom:12px}.tyt span{color:var(--red)}
+    .tyt{font-family:var(--fd);font-size:clamp(32px,10vw,56px);font-weight:800;letter-spacing:2px;text-transform:uppercase;line-height:.95;margin-bottom:12px;word-break:break-word;overflow-wrap:break-word}.tyt span{color:var(--red)}
     .tys{font-family:var(--fs);font-size:22px;color:var(--g);margin-bottom:32px}
     .tyc{background:var(--s);border:1px solid var(--b);padding:24px;position:relative;margin-bottom:24px;width:100%}.tyc::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:var(--red)}
     .tyct{font-size:15px;line-height:1.8;color:#aaa}.tyct strong{color:var(--w)}
@@ -12264,8 +12264,7 @@ async function doShowGame(){
   document.getElementById('pn').textContent=cAsgn.prizeName;
   document.getElementById('pd').textContent=cAsgn.prizeDesc;
   initScratch();
-  const listenKey=cUser.email?'email_'+cUser.email.toLowerCase().replace(/[^a-z0-9]/g,'_'):cUser.token;
-  rtUnsub=window.DB.listenAssignment(listenKey,d=>{if(d.status==='delivered')showTY();});
+  // Nessun listener automatico — pagina QR rimane ferma
 }
 
 // ── PRIZES ENDED SCREEN ─────────────────────────────────────────────────
@@ -12379,7 +12378,7 @@ function showAlreadyPlayed(){
   },100);
   // Listen for delivery in realtime
   const listenKey=cUser.email?'email_'+cUser.email.toLowerCase().replace(/[^a-z0-9]/g,'_'):cUser.token;
-  if(!rtUnsub) rtUnsub=window.DB.listenAssignment(listenKey,d=>{if(d.status==='delivered'){cAsgn=d;showAlreadyPlayed();}});
+  // Nessun listener — antifrode blocca rigiocate tramite email/fingerprint
 }
 
 // ── TEST MODE ─────────────────────────────────────────────────────────────
@@ -12517,24 +12516,7 @@ function showResult(){
   new QRCode(document.getElementById('qrc'),{text:cAsgn.code,width:130,height:130,colorDark:'#0a0a0a',colorLight:'#ffffff'});
   fireParticles();
   if(navigator.vibrate)navigator.vibrate([0,80,40,160,40,80]);
-  // Polling ogni 5 secondi per rilevare consegna (più affidabile del realtime su mobile)
-  if(!rtUnsub){
-    // Prima prova realtime listener
-    try{
-      rtUnsub=window.DB.listenAssignment(cUser.token,d=>{if(d.status==='delivered'){if(rtPollInterval){clearInterval(rtPollInterval);rtPollInterval=null;}showTY();}});
-    }catch(e){ console.log('[Listen] Error:', e); }
-    // Polling di backup ogni 5 secondi
-    rtPollInterval = setInterval(async()=>{
-      try{
-        const asgn = await window.DB.getDoc_('assignments', cAsgn.id);
-        if(asgn && asgn.status === 'delivered'){
-          clearInterval(rtPollInterval); rtPollInterval = null;
-          if(rtUnsub){ try{rtUnsub();}catch(e){} rtUnsub=null; }
-          showTY();
-        }
-      }catch(e){}
-    }, 5000);
-  }
+  // Nessun polling — pagina QR rimane ferma, antifrode blocca rigiocate
 }
 
 function showDiscountResult(){
