@@ -10655,19 +10655,12 @@ function findAlignmentPattern(matrix, alignmentPatternQuads, topRight, topLeft, 
         return null;
       }
       
-      // Conta giocate effettive (escludendo pointer)
-      const allAsgnRange = await getDocs(collection(db,"assignments"));
-      let count = 0;
-      allAsgnRange.docs.forEach(d=>{
-        const a = d.data();
-        if(a._ref) return; // skip pointer
-        if(testMode){
-          if(a.isTest) count++;
-        }else{
-          if(!a.isTest) count++;
-        }
-      });
-      console.log("[assignPrize] Giocate effettive:",count,"/ totale:",fullSeq.length);
+      // Usa counter atomico invece di leggere tutti gli assignments
+      // MOLTO più efficiente: 1 READ invece di N READ
+      const counterKey = testMode ? 'counter_test' : 'counter_real';
+      const counterSnap = await getDoc(doc(db,"config",counterKey));
+      const count = counterSnap.exists() ? (counterSnap.data().value || 0) : 0;
+      console.log("[assignPrize] Giocate effettive (counter):",count,"/ totale:",fullSeq.length);
       
       // Premi esauriti?
       if(count >= fullSeq.length){
@@ -10709,6 +10702,12 @@ function findAlignmentPattern(matrix, alignmentPatternQuads, topRight, topLeft, 
         discountCode: isDiscount ? (prize.discountCode||'EVORAFIERA15') : ''
       };
       await setDoc(doc(db,"assignments",realPrimaryKey),asgn);
+      // Incrementa counter atomico (sostituisce getDocs per il conteggio)
+      const counterKey2 = testMode ? 'counter_test' : 'counter_real';
+      try{
+        await setDoc(doc(db,"config",counterKey2),{value:increment(1)},{merge:true});
+      }catch(e){}
+      
       if(!testMode){
         await savePointers(asgn);
         // Aggiorna leaderboard counter (ref dell'influencer)
@@ -10824,7 +10823,9 @@ function findAlignmentPattern(matrix, alignmentPatternQuads, topRight, topLeft, 
       // 8. Delete scans
       try{const scSnap=await getDocs(collection(db,"scans"));await Promise.all(scSnap.docs.map(d=>deleteDoc(doc(db,"scans",d.id))));}catch(e){}
       // 9. Reset daily counter
-      // daily_stats rimosso
+      // Reset counter giocate
+      try{await setDoc(doc(db,"config","counter_real"),{value:0});}catch(e){}
+      try{await setDoc(doc(db,"config","counter_test"),{value:0});}catch(e){}
     }
 
     // Helper: get a doc by collection/id, returns data or null
