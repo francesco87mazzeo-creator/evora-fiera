@@ -10640,25 +10640,15 @@ function findAlignmentPattern(matrix, alignmentPatternQuads, topRight, topLeft, 
         if(fingerprint) try{await setDoc(doc(db,"assignments",'fp_'+fingerprint),{_ref:realPrimaryKey,assignedAt:asgn.assignedAt});}catch(e){}
       }
       
-      // Usa cache sequenze se disponibile (precachiate al boot)
-      let mainSeq = window._cachedMainSeq || null;
-      let extSeq = window._cachedEmergSeq || null;
-      
-      // Se non in cache, carica da Firebase
-      if(!mainSeq){
-        const [mainSnap, extSnap] = await Promise.all([
-          getDoc(doc(db,"sequences","main")),
-          getDoc(doc(db,"sequences","emergency"))
-        ]);
-        mainSeq = mainSnap.exists() ? (mainSnap.data().prizes||[]) : [];
-        extSeq = extSnap.exists() ? (extSnap.data().prizes||[]) : [];
-        // Salva in cache per prossima volta
-        window._cachedMainSeq = mainSeq;
-        window._cachedEmergSeq = extSeq;
-      }
-      
-      const fullSeq = [...mainSeq, ...(extSeq||[])];
-      console.log("[assignPrize] Main:",mainSeq.length,"Emergency:",(extSeq||[]).length,"Totale slot:",fullSeq.length);
+      // Legge SEMPRE da Firebase — no cache (causa premi sbagliati dopo reset)
+      const [mainSnap, extSnap] = await Promise.all([
+        getDoc(doc(db,"sequences","main")),
+        getDoc(doc(db,"sequences","emergency"))
+      ]);
+      const mainSeq = mainSnap.exists() ? (mainSnap.data().prizes||[]) : [];
+      const extSeq = extSnap.exists() ? (extSnap.data().prizes||[]) : [];
+      const fullSeq = [...mainSeq, ...extSeq];
+      console.log("[assignPrize] Main:",mainSeq.length,"Emergency:",extSeq.length,"Totale slot:",fullSeq.length);
       
       if(fullSeq.length === 0){
         console.log("[assignPrize] Nessuna sequenza disponibile - genera prima i premi");
