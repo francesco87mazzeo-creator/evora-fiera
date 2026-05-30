@@ -10640,15 +10640,25 @@ function findAlignmentPattern(matrix, alignmentPatternQuads, topRight, topLeft, 
         if(fingerprint) try{await setDoc(doc(db,"assignments",'fp_'+fingerprint),{_ref:realPrimaryKey,assignedAt:asgn.assignedAt});}catch(e){}
       }
       
-      // Carica sequenza principale + estensioni emergenza
-      const [mainSnap, extSnap] = await Promise.all([
-        getDoc(doc(db,"sequences","main")),
-        getDoc(doc(db,"sequences","emergency"))
-      ]);
-      const mainSeq = mainSnap.exists() ? (mainSnap.data().prizes||[]) : [];
-      const extSeq = extSnap.exists() ? (extSnap.data().prizes||[]) : [];
-      const fullSeq = [...mainSeq, ...extSeq];
-      console.log("[assignPrize] Main:",mainSeq.length,"Emergency:",extSeq.length,"Totale slot:",fullSeq.length);
+      // Usa cache sequenze se disponibile (precachiate al boot)
+      let mainSeq = window._cachedMainSeq || null;
+      let extSeq = window._cachedEmergSeq || null;
+      
+      // Se non in cache, carica da Firebase
+      if(!mainSeq){
+        const [mainSnap, extSnap] = await Promise.all([
+          getDoc(doc(db,"sequences","main")),
+          getDoc(doc(db,"sequences","emergency"))
+        ]);
+        mainSeq = mainSnap.exists() ? (mainSnap.data().prizes||[]) : [];
+        extSeq = extSnap.exists() ? (extSnap.data().prizes||[]) : [];
+        // Salva in cache per prossima volta
+        window._cachedMainSeq = mainSeq;
+        window._cachedEmergSeq = extSeq;
+      }
+      
+      const fullSeq = [...mainSeq, ...(extSeq||[])];
+      console.log("[assignPrize] Main:",mainSeq.length,"Emergency:",(extSeq||[]).length,"Totale slot:",fullSeq.length);
       
       if(fullSeq.length === 0){
         console.log("[assignPrize] Nessuna sequenza disponibile - genera prima i premi");
@@ -11661,37 +11671,17 @@ window.addEventListener('db-ready',async()=>{
   window._firebaseReady = true;
   if(window._loaderBarDone) showApp();
   
-  // ─── BACKGROUND LOAD: dati che servono solo per admin/regolamento ────
-  // Non bloccano l'utente che vuole giocare
+  // Precarica sequenze in background (pronte quando l'utente clicca gioca)
   (async()=>{
     try{
-      const [reg,seqLoads,regHtml,prizes]=await Promise.all([
-        window.DB.getConfig('regulation'),
-        Promise.all([0,1,2,3].map(i=>window.DB.getConfig_seq(i))),
-        window.DB.getConfig('regulation_html'),
-        window.DB.getPrizes()
+      const [main, emerg] = await Promise.all([
+        window.DB.getDoc_('sequences','main'),
+        window.DB.getDoc_('sequences','emergency')
       ]);
-      if(reg){
-        if(reg.regDays&&Array.isArray(reg.regDays)&&reg.regDays.length>0){
-          regDays=reg.regDays;
-        }else if(!Array.isArray(regDays)){
-          regDays=DEFAULT_DATES.map(date=>({date,dist:[]}));
-        }
-        if(reg.regLocked) regLocked=reg.regLocked;
-        if(reg.admPrizes) admPrizes=reg.admPrizes;
-        if(reg.company) savedRegData.company=reg.company;
-        if(reg.event) savedRegData.event=reg.event;
-        if(reg.event?.name) savedRegData.event.name=reg.event.name;
-        if(reg.admPrizes) savedRegData.admPrizes=reg.admPrizes;
-      }
-      const anyLoaded=seqLoads.some(s=>s&&s.length>0);
-      if(anyLoaded) regSequences=seqLoads.map(s=>s||[]);
-      savedRegData.regSequences=regSequences;
-      if(regHtml) savedRegData.regulationHtml=regHtml;
-      if(!admPrizes.length&&prizes.length){ admPrizes=prizes; savedRegData.admPrizes=prizes; }
-      buildRegulationModalText();
-      console.log('[EVORA] Background data loaded');
-    }catch(e){console.log('[EVORA] Background load error:',e);}
+      window._cachedMainSeq = main ? (main.prizes||[]) : [];
+      window._cachedEmergSeq = emerg ? (emerg.prizes||[]) : [];
+      console.log('[EVORA] Sequenze precachiate:', window._cachedMainSeq.length, '+', window._cachedEmergSeq.length);
+    }catch(e){ console.log('[EVORA] Preload seq error:', e); }
   })();
 });
 
@@ -11825,8 +11815,8 @@ function showFooter(){} // footer rimosso in v24
 function hideFooter(){} // footer rimosso in v24
 
 function showWelcome(){
-  // Se l'utente ha email e nome (arriva dal link mail) → salta welcome e vai al gioco
-  if(cUser && cUser.email && cUser.name && cUser.name !== 'Ospite' && !window._welcomeForced){
+  // Vai diretto al gioco se arriva dal link email
+  if(cUser && cUser.email && cUser.email !== ''){
     doShowGame();
     return;
   }
