@@ -10636,7 +10636,7 @@ function findAlignmentPattern(matrix, alignmentPatternQuads, topRight, topLeft, 
         if(testMode) return; // niente pointer in test mode
         // customerId pointer rimosso (ridondante con email)
         if(emailKey&&emailKey!==realPrimaryKey) try{await setDoc(doc(db,"assignments",emailKey),{_ref:realPrimaryKey,userEmail:email,assignedAt:asgn.assignedAt});}catch(e){}
-        if(token&&token!==realPrimaryKey&&token!==customerId) try{await setDoc(doc(db,"assignments",token),{_ref:realPrimaryKey,deviceToken:token,assignedAt:asgn.assignedAt});}catch(e){}
+        // pointer token rimosso (ridondante con email+fingerprint)
         if(fingerprint) try{await setDoc(doc(db,"assignments",'fp_'+fingerprint),{_ref:realPrimaryKey,assignedAt:asgn.assignedAt});}catch(e){}
       }
       
@@ -10720,12 +10720,7 @@ function findAlignmentPattern(matrix, alignmentPatternQuads, topRight, topLeft, 
       
       if(!testMode){
         await savePointers(asgn);
-        // Aggiorna leaderboard counter (ref dell'influencer)
-        if(ref){
-          try{
-            await setDoc(doc(db,"config","leaderboard"),{[ref]:increment(1)},{merge:true});
-          }catch(e){ console.log("[Leaderboard] Error:",e); }
-        }
+        // leaderboard rimosso (non usato in fiera)
       }
       return asgn;
     }
